@@ -593,3 +593,13 @@ pixelrealm/
 
 ### ⚠️ 중요 — 아직 남은 제약
 - 지금은 Supabase를 아직 연결 안 해서 **Render의 로컬 파일(users.json 등)에 저장 중인데, Render 무료 플랜은 재배포할 때마다 디스크가 초기화됨** — 즉 지금 이 주소에서 만든 계정은 다음 코드 푸시(재배포) 때 전부 사라짐. Supabase 프로젝트 URL/service_role 키를 넘겨주시면 영구 저장소로 바로 전환 예정
+
+## 26. Supabase 연결 완료 — 영구 저장소 전환 (v2.6, 완료)
+
+- moneyroad 조직 아래 새 Supabase 프로젝트 `pixelrealm` 생성(Northeast Asia/Seoul 리전), `supabase/schema.sql`을 SQL Editor에서 실행해 users/guilds/market_listings 테이블 생성
+- Render 서비스에 `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` 환경변수 등록 후 재배포 — 이제 계정/길드/거래장터 데이터가 **Render 재배포와 무관하게 영구 보존**됨(더 이상 파일 초기화 문제 없음)
+- 실기 검증: 배포 주소(https://pixelrealm-1z77.onrender.com)에서 신규 회원가입 → Supabase `users` 테이블에 해당 행이 실제로 생성되는 것까지 SQL로 직접 확인 완료
+- 서버 로그에서 `[db] Supabase 연결 사용`만 뜨고 로드 실패 메시지가 없는 것 확인 — JSON 파일 폴백이 아니라 실제 Supabase 경로로 동작 중
+
+### 참고 — 키/시크릿 취급
+- service_role 키는 채팅에 노출하지 않고 브라우저 클립보드 복사→붙여넣기로만 전달(에이전트가 직접 읽지 않도록 보호장치 적용)
