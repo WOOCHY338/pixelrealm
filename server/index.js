@@ -434,13 +434,13 @@ const OBSTACLES = [
   ...scatterObstacles(FIELD5_BOX, 'cairn', 3),        // 얼어붙은 봉우리 — 돌무덤
   ...scatterObstacles(FIELD6_BOX, 'cactus', 4),       // 불타는 사막 — 선인장
   ...scatterObstacles(FIELD7_BOX, 'ruinWall', 3),     // 잊혀진 폐허 — 무너진 벽
-  // 도시 — 민가·시장 좌판을 채워 넣어 진짜 도시처럼 붐비게, 외곽엔 성벽을 둘러 마을이 아니라 도시처럼
-  ...scatterObstacles(CAPITAL_BOX, 'house', 9, 30),
-  ...scatterObstacles(CAPITAL_BOX, 'stall', 3, 26),
-  ...scatterObstacles(SECOND_CITY_BOX, 'house', 6, 30),
-  ...scatterObstacles(SECOND_CITY_BOX, 'stall', 2, 26),
-  ...ringObstacles(CAPITAL_BOX, 'wallSeg', 26, 20, 34),
-  ...ringObstacles(SECOND_CITY_BOX, 'wallSeg', 20, 20, 34),
+  // 도시 — 민가·시장 좌판을 훨씬 촘촘하게 채워 넣어 진짜 대도시처럼 붐비게, 외곽엔 성벽을 둘러 마을이 아니라 도시처럼
+  ...scatterObstacles(CAPITAL_BOX, 'house', 32, 30),
+  ...scatterObstacles(CAPITAL_BOX, 'stall', 12, 26),
+  ...scatterObstacles(SECOND_CITY_BOX, 'house', 20, 30),
+  ...scatterObstacles(SECOND_CITY_BOX, 'stall', 8, 26),
+  ...ringObstacles(CAPITAL_BOX, 'wallSeg', 32, 20, 34),
+  ...ringObstacles(SECOND_CITY_BOX, 'wallSeg', 24, 20, 34),
 ];
 
 // ── 장식(꽃/흙길) — 충돌 없이 순수 시각 요소, 서버가 위치를 고정해서 모두에게 동일하게 보이게 함 ──
@@ -507,8 +507,8 @@ const DECORATIONS = [
     return pathDecorations(fieldCenter, hubEdge, 'dirt', 110);
   }),
   // 도시 가로등 — 거리를 밝혀서 진짜 도시 느낌
-  ...scatterDecorations(CAPITAL_BOX, 'lamp', 8),
-  ...scatterDecorations(SECOND_CITY_BOX, 'lamp', 6),
+  ...scatterDecorations(CAPITAL_BOX, 'lamp', 22),
+  ...scatterDecorations(SECOND_CITY_BOX, 'lamp', 14),
 ];
 
 // ── 공용 물리 ───────────────────────────────────────────

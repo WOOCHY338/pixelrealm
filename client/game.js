@@ -2079,6 +2079,24 @@ function drawSkillFx(now) {
         ctx.lineTo(fx.x + Math.cos(ang) * outer, fx.y + Math.sin(ang) * outer);
         ctx.stroke();
       }
+      // "523" 대사 텍스트 — 팍 튀어나왔다가 사라지는 스킬 연출
+      const textDur = 550;
+      if (age <= textDur) {
+        const tt = age / textDur;
+        const popIn = Math.min(1, tt / 0.22);
+        const scale = 0.5 + popIn * 0.9 - (tt > 0.7 ? (tt - 0.7) / 0.3 * 0.25 : 0);
+        const textAlpha = tt < 0.72 ? 1 : Math.max(0, 1 - (tt - 0.72) / 0.28);
+        ctx.translate(fx.x, fx.y - 44);
+        ctx.scale(scale, scale);
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = `rgba(25, 0, 35, ${textAlpha})`;
+        ctx.strokeText('523', 0, 0);
+        ctx.fillStyle = `rgba(224, 130, 255, ${textAlpha})`;
+        ctx.fillText('523', 0, 0);
+      }
       ctx.restore();
     } else {
       skillFx.splice(i, 1);
