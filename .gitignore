@@ -1,0 +1,6 @@
+node_modules/
+
+# 실행 중 생성되는 계정/길드 데이터 — 실제 플레이어 정보라 저장소에는 올리지 않음
+server/users.json
+server/guilds.json
+server/accounts.json

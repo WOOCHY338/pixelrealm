@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelRealm — 월드1 테스트</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #14151c;
+    font-family: -apple-system, "Malgun Gothic", sans-serif;
+  }
+  #wrap {
+    width: 100%;
+    height: 100%;
+  }
+  #stage {
+    position: fixed;
+    inset: 0;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #bfe0f2;
+    image-rendering: pixelated;
+    cursor: crosshair;
+  }
+  #hud {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: rgba(10, 11, 18, 0.72);
+    color: #9aa0c0;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 5px 12px;
+  }
+  #hud b { color: #e8e9f5; }
+  #musicToggleBtn, #changeClassBtn, #statPointsBtn {
+    background: #23253a; color: #9aa0c0; border: 1px solid #3a3c54; border-radius: 4px;
+    padding: 2px 8px; font-size: 12px; cursor: pointer;
+  }
+  #musicToggleBtn:hover, #changeClassBtn:hover, #statPointsBtn:hover { background: #33354a; }
+
+  .panel {
+    position: absolute;
+    background: rgba(12, 13, 20, 0.94);
+    border: 2px solid #4a4d6e;
+    border-radius: 8px;
+    color: #e8e9f5;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  .panel.hidden { display: none; }
+
+  #raidPrompt {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 280px; text-align: center;
+  }
+  #raidPrompt h3 { margin: 0 0 12px; font-size: 15px; }
+  #raidPrompt .row { display: flex; flex-direction: column; gap: 8px; }
+  #raidPrompt button {
+    padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
+    border: 2px solid #565a80; border-radius: 4px; cursor: pointer;
+  }
+  #raidPrompt button:hover { background: #43466a; }
+  #raidPrompt .cancel { background: transparent; border-color: #3a3c54; color: #9aa0c0; }
+
+  #raidBrowser {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 340px;
+  }
+  #raidBrowser h3 { margin: 0 0 10px; font-size: 15px; }
+  #raidRoomList { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; margin-bottom: 10px; }
+  .raid-room-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #23253a; border: 1px solid #3a3c54; border-radius: 4px; padding: 8px 10px; font-size: 12px;
+  }
+  .raid-room-row button {
+    padding: 5px 10px; font-size: 12px; background: #3d5a80; color: #e8e9f5;
+    border: none; border-radius: 4px; cursor: pointer;
+  }
+  #raidRoomEmpty { color: #6a6e90; font-size: 12px; padding: 10px 0; }
+  #raidBrowser .close { width: 100%; padding: 8px; background: transparent; color: #9aa0c0; border: 1px solid #3a3c54; border-radius: 4px; cursor: pointer; }
+
+  #leaveRaidBtn {
+    position: absolute; top: 10px; right: 10px;
+    padding: 6px 12px; font-size: 12px;
+    background: rgba(224, 85, 78, 0.85); color: #fff; border: none; border-radius: 4px; cursor: pointer;
+  }
+  #leaveRaidBtn.hidden { display: none; }
+
+  #banner {
+    position: absolute; top: 90px; left: 50%; transform: translate(-50%, 0);
+    color: #ffe9a8; font-size: 22px; font-weight: bold; text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+    pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  }
+
+  #shopPanel, #blacksmithPanel, #inventoryPanel {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 380px;
+  }
+  #shopPanel h3, #blacksmithPanel h3, #inventoryPanel h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
+  .item-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; margin-bottom: 10px; }
+  .item-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: #23253a; border: 1px solid #3a3c54; border-radius: 4px; padding: 8px 10px; font-size: 12px;
+  }
+  .item-row .desc { flex: 1; }
+  .item-row .desc .name { color: #e8e9f5; font-weight: bold; }
+  .item-row .desc .sub { color: #9aa0c0; font-size: 11px; }
+  .item-row button {
+    padding: 5px 10px; font-size: 12px; background: #3d5a80; color: #e8e9f5;
+    border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;
+  }
+  .item-row button:disabled { opacity: 0.4; cursor: default; }
+  .panel .close { width: 100%; padding: 8px; background: transparent; color: #9aa0c0; border: 1px solid #3a3c54; border-radius: 4px; cursor: pointer; }
+  .empty-hint { color: #6a6e90; font-size: 12px; padding: 10px 0; }
+
+  #blacksmithPanel .weapon-card {
+    background: #23253a; border: 1px solid #3a3c54; border-radius: 6px; padding: 12px; margin-bottom: 12px; font-size: 13px;
+  }
+  #blacksmithPanel .weapon-card .name { font-weight: bold; margin-bottom: 4px; }
+  #blacksmithPanel .actions { display: flex; gap: 8px; margin-bottom: 10px; }
+  #blacksmithPanel .actions button {
+    flex: 1; padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
+    border: 2px solid #565a80; border-radius: 4px; cursor: pointer;
+  }
+  #blacksmithPanel .actions button:disabled { opacity: 0.4; cursor: default; }
+
+  #chatLog {
+    position: fixed;
+    left: 12px; bottom: 40px;
+    width: 320px; max-height: 160px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 2px;
+    pointer-events: none;
+    font-size: 12px;
+  }
+  #chatLog .line {
+    background: rgba(10, 11, 18, 0.55);
+    color: #e8e9f5;
+    padding: 3px 8px;
+    border-radius: 4px;
+    width: fit-content;
+    max-width: 100%;
+    word-break: break-word;
+  }
+  #chatLog .line b { color: #8fd6ff; margin-right: 4px; }
+
+  #chatInputBar {
+    position: fixed;
+    left: 12px; bottom: 40px;
+    width: 320px;
+  }
+  #chatInputBar.hidden { display: none; }
+  #chatInput {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    font-size: 13px;
+    background: rgba(12, 13, 20, 0.92);
+    color: #e8e9f5;
+    border: 2px solid #565a80;
+    border-radius: 4px;
+    outline: none;
+  }
+
+  #classSelectOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(8, 9, 15, 0.94);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #e8e9f5;
+  }
+  #classSelectOverlay.hidden { display: none; }
+  #classSelectOverlay h2 { margin: 0 0 22px; font-size: 20px; }
+  #classSelectCards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; max-width: 900px; padding: 0 16px; }
+  .class-card {
+    width: 220px;
+    background: #1a1c2a;
+    border: 2px solid #3a3c54;
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .class-card:hover { border-color: #7fa0e0; transform: translateY(-4px); }
+  .class-card.active { border-color: #7ecb9e; }
+  .class-card .icon { font-size: 34px; margin-bottom: 8px; }
+  .class-card h3 { margin: 0 0 8px; font-size: 16px; }
+  .class-card .desc { font-size: 12px; color: #9aa0c0; line-height: 1.6; text-align: left; }
+  .class-card .desc b { color: #e8e9f5; }
+  .class-card .cost { margin-top: 10px; font-size: 12px; font-weight: bold; color: #ffd45c; min-height: 14px; }
+  .class-card.active .cost { color: #7ecb9e; }
+
+  #gameOverOverlay {
+    position: fixed; inset: 0; z-index: 70;
+    background: rgba(4, 2, 6, 0.85);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #ff5c5c; pointer-events: none;
+    opacity: 0; transition: opacity 0.25s;
+  }
+  #gameOverOverlay.show { opacity: 1; }
+  #gameOverOverlay.hidden { display: none; }
+  #gameOverOverlay h1 {
+    font-size: 56px; margin: 0; letter-spacing: 8px;
+    text-shadow: 0 0 24px rgba(255, 40, 40, 0.8), 0 0 4px #000;
+    animation: gameOverPulse 1.1s ease-in-out infinite;
+  }
+  #gameOverOverlay p { color: #e8b0b0; font-size: 14px; margin-top: 10px; letter-spacing: 2px; }
+  @keyframes gameOverPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+
+  #authOverlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(8, 9, 15, 0.96);
+    display: flex; align-items: center; justify-content: center;
+    color: #e8e9f5;
+  }
+  #authOverlay.hidden { display: none; }
+  #authBox { width: 300px; background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 24px; }
+  #authBox h2 { margin: 0 0 16px; font-size: 18px; text-align: center; }
+  #authBox input {
+    width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 9px 10px; font-size: 13px;
+    background: #23253a; color: #e8e9f5; border: 1px solid #3a3c54; border-radius: 4px; outline: none;
+  }
+  #authBox .row { display: flex; gap: 8px; }
+  #authBox button {
+    flex: 1; padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
+    border: 2px solid #565a80; border-radius: 4px; cursor: pointer; margin-top: 4px;
+  }
+  #authBox button:hover { background: #43466a; }
+  #authError { color: #e0857a; font-size: 12px; min-height: 16px; margin-bottom: 6px; text-align: center; }
+  #authNicknameRow { display: none; }
+  #authNicknameRow.show { display: block; }
+
+  #statPanel, #skillShopPanel, #guildHallPanel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; }
+  #statPanel h3, #skillShopPanel h3, #guildHallPanel h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
+  .stat-row { display: flex; align-items: center; justify-content: space-between; background: #23253a; border: 1px solid #3a3c54; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; }
+  .stat-row button { padding: 4px 10px; font-size: 12px; background: #3d5a80; color: #e8e9f5; border: none; border-radius: 4px; cursor: pointer; }
+  .stat-row button:disabled { opacity: 0.35; cursor: default; }
+  #statPointsInfo { color: #ffd45c; font-size: 12px; margin-bottom: 8px; }
+
+  .skill-catalog-row { background: #23253a; border: 1px solid #3a3c54; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; }
+  .skill-catalog-row .top { display: flex; justify-content: space-between; align-items: center; }
+  .skill-catalog-row .name { font-weight: bold; }
+  .skill-catalog-row .desc2 { color: #9aa0c0; margin-top: 3px; }
+  .skill-slots { display: flex; gap: 8px; margin: 10px 0; }
+  .skill-slot {
+    flex: 1; background: #23253a; border: 2px dashed #3a3c54; border-radius: 6px; padding: 10px; text-align: center; font-size: 12px; cursor: pointer; min-height: 40px;
+  }
+  .skill-slot.filled { border-style: solid; border-color: #7ecb9e; }
+
+  .guild-row { display: flex; align-items: center; justify-content: space-between; background: #23253a; border: 1px solid #3a3c54; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; }
+  #guildCreateForm input { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 8px; font-size: 12px; background: #23253a; color: #e8e9f5; border: 1px solid #3a3c54; border-radius: 4px; }
+  #guildCreateForm label { font-size: 12px; display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  #guildWarning { color: #ffd45c; font-size: 11px; margin-bottom: 10px; }
+  #npcActionBtn:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="gameOverOverlay" class="hidden">
+    <h1>GAME OVER</h1>
+    <p>마을에서 부활합니다...</p>
+  </div>
+  <div id="authOverlay">
+    <div id="authBox">
+      <h2 id="authTitle">로그인</h2>
+      <div id="authError"></div>
+      <input id="authUsername" type="text" placeholder="아이디" maxlength="20" autocomplete="username" />
+      <input id="authPassword" type="password" placeholder="비밀번호" maxlength="40" autocomplete="current-password" />
+      <div id="authNicknameRow"><input id="authNickname" type="text" placeholder="닉네임" maxlength="12" /></div>
+      <div class="row">
+        <button id="authSubmitBtn">로그인</button>
+      </div>
+      <div class="row">
+        <button id="authSwitchBtn">계정이 없으신가요? 회원가입</button>
+      </div>
+    </div>
+  </div>
+  <div id="classSelectOverlay" class="hidden">
+    <h2>직업을 선택하세요</h2>
+    <div id="classSelectCards">
+      <div class="class-card" data-class="warrior">
+        <div class="icon">검</div>
+        <h3>용사</h3>
+        <div class="desc">
+          <b>기본 공격</b>: 검(근접, 부채꼴)<br>
+          <b>스킬(E)</b>: 대시 — 바라보는 방향으로 순간 돌진
+        </div>
+        <div class="cost"></div>
+      </div>
+      <div class="class-card" data-class="archer">
+        <div class="icon">활</div>
+        <h3>궁수</h3>
+        <div class="desc">
+          <b>기본 공격</b>: 활(원거리 화살)<br>
+          <b>스킬(E)</b>: 자가 치유 — 자신의 체력 회복
+        </div>
+        <div class="cost"></div>
+      </div>
+      <div class="class-card" data-class="healer">
+        <div class="icon">봉</div>
+        <h3>힐러</h3>
+        <div class="desc">
+          <b>기본 공격</b>: 마법봉(원거리, 조준한 위치로 발사)<br>
+          <b>스킬(E)</b>: 치유의 파동 — 자신 포함 주변 아군 체력 회복
+        </div>
+        <div class="cost"></div>
+      </div>
+    </div>
+  </div>
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <button id="leaveRaidBtn" class="hidden">레이드 나가기</button>
+    <div id="banner"></div>
+
+    <div id="raidPrompt" class="panel hidden">
+      <h3>레이드 입구</h3>
+      <div class="row">
+        <button id="raidSoloBtn">혼자 도전</button>
+        <button id="raidPartyBtn">파티 모집(레이드 방 생성)</button>
+        <button id="raidCancelBtn" class="cancel">취소</button>
+      </div>
+    </div>
+
+    <div id="raidBrowser" class="panel hidden">
+      <h3>레이드 접수처</h3>
+      <div id="raidRoomList"></div>
+      <div id="raidRoomEmpty" style="display:none;">열려있는 파티 레이드가 없습니다.</div>
+      <button class="close" id="raidBrowserCloseBtn">닫기</button>
+    </div>
+
+    <div id="raidLobbyPanel" class="panel hidden" style="top:16px;left:50%;transform:translateX(-50%);width:280px;">
+      <h3>레이드 대기실</h3>
+      <div id="raidLobbyMembers" style="margin-bottom:10px;"></div>
+      <button id="raidLobbyStartBtn" style="width:100%;padding:10px;font-size:13px;background:#3d5a80;color:#e8e9f5;border:none;border-radius:4px;cursor:pointer;">시작</button>
+      <div id="raidLobbyWaitText" style="text-align:center;font-size:12px;color:#9aa0c0;padding:8px 0;">방장이 시작하기를 기다리는 중...</div>
+    </div>
+
+    <div id="npcPanel" class="panel hidden" style="top:50%;left:50%;transform:translate(-50%,-50%);width:360px;">
+      <h3><span id="npcPanelName">NPC</span></h3>
+      <div id="npcPanelDesc" style="font-size:13px;margin-bottom:10px;line-height:1.5;"></div>
+      <div id="npcPanelProgress" style="font-size:12px;color:#9aa0c0;margin-bottom:12px;"></div>
+      <button id="npcActionBtn" style="width:100%;padding:10px;font-size:13px;background:#3d5a80;color:#e8e9f5;border:none;border-radius:4px;cursor:pointer;margin-bottom:8px;"></button>
+      <button class="close" id="npcCloseBtn">닫기</button>
+    </div>
+
+    <div id="shopPanel" class="panel hidden">
+      <h3><span>상점</span><span>골드: <b id="shopGold">0</b></span></h3>
+      <div id="shopList" class="item-list"></div>
+      <button class="close" id="shopCloseBtn">닫기</button>
+    </div>
+
+    <div id="blacksmithPanel" class="panel hidden">
+      <h3><span>대장간</span><span>골드: <b id="blacksmithGold">0</b></span></h3>
+      <div class="weapon-card">
+        <div class="name" id="blacksmithWeaponName">-</div>
+        <div class="sub" id="blacksmithWeaponStat">-</div>
+      </div>
+      <div class="actions">
+        <button id="blacksmithEnhanceBtn">강화</button>
+        <button id="blacksmithRepairBtn">내구도 수리</button>
+      </div>
+      <button class="close" id="blacksmithCloseBtn">닫기</button>
+    </div>
+
+    <div id="inventoryPanel" class="panel hidden">
+      <h3><span>인벤토리 (B로 닫기)</span><span>골드: <b id="invGold">0</b></span></h3>
+      <div id="invList" class="item-list"></div>
+    </div>
+
+    <div id="statPanel" class="panel hidden">
+      <h3><span>스텟 (C로 닫기)</span></h3>
+      <div id="statPointsInfo">남은 포인트: 0</div>
+      <div id="statRows"></div>
+    </div>
+
+    <div id="skillShopPanel" class="panel hidden">
+      <h3><span>스킬 상점</span><span>골드: <b id="skillShopGold">0</b></span></h3>
+      <div style="font-size:11px;color:#9aa0c0;margin-bottom:8px;">장착 슬롯(클릭해서 교체) — 왼쪽:E, 오른쪽:R</div>
+      <div class="skill-slots" id="skillSlots"></div>
+      <div id="skillCatalogList" class="item-list"></div>
+      <button class="close" id="skillShopCloseBtn">닫기</button>
+    </div>
+
+    <div id="guildHallPanel" class="panel hidden">
+      <h3><span id="guildHallTitle">마을 회관</span></h3>
+      <div id="guildHallNoGuild">
+        <div id="guildWarning">※ 길드 이름과 가입 방식은 생성 후 다시 바꿀 수 없습니다.</div>
+        <div id="guildCreateForm">
+          <input id="guildNameInput" type="text" maxlength="20" placeholder="길드 이름" />
+          <label><input id="guildApprovalCheck" type="checkbox" /> 가입 시 길드장 승인 필요(체크 안 하면 자유 가입)</label>
+          <button class="close" id="guildCreateBtn" style="background:#3d5a80;">길드 생성</button>
+        </div>
+        <div style="margin:14px 0 6px;font-size:12px;color:#9aa0c0;">또는 기존 길드에 가입:</div>
+        <div id="guildListArea"></div>
+      </div>
+      <div id="guildHallMine" style="display:none;">
+        <div id="guildMineInfo" style="margin-bottom:10px;font-size:13px;"></div>
+        <div id="guildInviteRow" style="display:none;margin-bottom:10px;">
+          <input id="guildInviteInput" type="text" placeholder="영입할 아이디" style="width:100%;box-sizing:border-box;padding:8px;font-size:12px;background:#23253a;color:#e8e9f5;border:1px solid #3a3c54;border-radius:4px;margin-bottom:6px;" />
+          <button id="guildInviteBtn" style="width:100%;padding:8px;font-size:12px;background:#3d5a80;color:#e8e9f5;border:none;border-radius:4px;cursor:pointer;">영입하기</button>
+        </div>
+        <div id="guildPendingArea"></div>
+        <div id="guildMemberArea"></div>
+        <button class="close" id="guildLeaveBtn">길드 탈퇴</button>
+      </div>
+      <button class="close" id="guildHallCloseBtn">닫기</button>
+    </div>
+
+    <div id="chatLog"></div>
+    <div id="chatInputBar" class="hidden">
+      <input id="chatInput" type="text" maxlength="120" placeholder="채팅 입력 후 Enter (Esc로 취소)" />
+    </div>
+  </div>
+  <div id="hud">
+    이동: <b>WASD</b> · 공격: <b>클릭/스페이스</b> · 스킬: <b>E/R</b> · 인벤토리: <b>B</b> · 스텟: <b>C</b> · 지도: <b>M</b> · 채팅: <b>Enter</b> &nbsp;|&nbsp;
+    서버: <b id="status">연결 중...</b> &nbsp;|&nbsp;
+    구역: <b id="zoneReadout">-</b> &nbsp;|&nbsp;
+    직업:<b id="classReadout">-</b> &nbsp;|&nbsp;
+    Lv.<b id="levelReadout">1</b> HP:<b id="hpReadout">-</b> EXP:<b id="expReadout">0</b> 골드:<b id="goldReadout">0</b> &nbsp;|&nbsp;
+    무기:<b id="weaponReadout">-</b> &nbsp;|&nbsp;
+    스킬(E):<b id="skillReadout">-</b> 스킬(R):<b id="skillReadout2">-</b> &nbsp;|&nbsp;
+    <b id="speedReadout">-</b> &nbsp;|&nbsp; FPS: <b id="fpsReadout">-</b> &nbsp;|&nbsp;
+    <button id="musicToggleBtn">음악: 켜짐</button>
+    <button id="changeClassBtn">직업 변경</button>
+    <button id="statPointsBtn">스텟 (0)</button>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
