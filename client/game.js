@@ -59,6 +59,56 @@ function showGameOverScreen() {
   }, 1600);
 }
 
+// ── 튜토리얼 — 신규 계정 첫 로그인 시(또는 이전에 안 봤으면) 한 번 보여주는 단계별 안내 ──
+const TUTORIAL_STEPS = [
+  { title: '이동과 공격', body: 'WASD로 이동하고, 마우스 클릭 또는 스페이스바로 공격합니다.' },
+  { title: '스킬 사용', body: 'E, R 키로 직업별 스킬을 사용하세요. 스킬 상점에서 새로운 스킬을 배우고 장착할 수 있습니다.' },
+  { title: '성장하기', body: '몬스터를 처치하면 경험치·골드·재료를 얻습니다. 레벨업 시 생기는 스텟 포인트는 C키로 분배하세요.' },
+  { title: '장비와 거래', body: '상점·대장간에서 무기를 사고 강화하세요. 거래장터(신규!)에서는 다른 플레이어와 아이템을 직접 사고팔 수 있습니다.' },
+  { title: '퀘스트와 길드', body: '마을 곳곳의 NPC에게 퀘스트를 받고, 마을회관에서 길드에 가입하거나 만들어보세요.' },
+  { title: '레이드', body: '레이드 접수처에서 파티를 모아보세요. 파티 레이드는 방장이 "시작"을 눌러야 전투가 시작됩니다.' },
+  { title: '지도', body: 'M키로 미니맵/전체지도를 볼 수 있어요. 단, 상점에서 세계 지도를 먼저 구매해야 합니다.' },
+];
+let tutorialStep = 0;
+let hasSeenTutorial = false;
+const tutorialOverlayEl = document.getElementById('tutorialOverlay');
+const tutorialStepLabelEl = document.getElementById('tutorialStepLabel');
+const tutorialTitleEl = document.getElementById('tutorialTitle');
+const tutorialBodyEl = document.getElementById('tutorialBody');
+const tutorialDotsEl = document.getElementById('tutorialDots');
+const tutorialPrevBtn = document.getElementById('tutorialPrevBtn');
+const tutorialNextBtn = document.getElementById('tutorialNextBtn');
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutorialStep];
+  tutorialStepLabelEl.textContent = `TUTORIAL ${tutorialStep + 1}/${TUTORIAL_STEPS.length}`;
+  tutorialTitleEl.textContent = step.title;
+  tutorialBodyEl.textContent = step.body;
+  tutorialDotsEl.innerHTML = '';
+  for (let i = 0; i < TUTORIAL_STEPS.length; i++) {
+    const dot = document.createElement('span');
+    if (i === tutorialStep) dot.className = 'active';
+    tutorialDotsEl.appendChild(dot);
+  }
+  tutorialPrevBtn.disabled = tutorialStep === 0;
+  tutorialNextBtn.textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? '시작하기' : '다음';
+}
+function showTutorial() {
+  tutorialStep = 0;
+  renderTutorialStep();
+  tutorialOverlayEl.classList.remove('hidden');
+}
+function closeTutorial() {
+  tutorialOverlayEl.classList.add('hidden');
+  hasSeenTutorial = true;
+  ws.send(JSON.stringify({ type: 'tutorial_done' }));
+}
+document.getElementById('tutorialSkipBtn').addEventListener('click', closeTutorial);
+tutorialPrevBtn.addEventListener('click', () => { if (tutorialStep > 0) { tutorialStep--; renderTutorialStep(); } });
+tutorialNextBtn.addEventListener('click', () => {
+  if (tutorialStep < TUTORIAL_STEPS.length - 1) { tutorialStep++; renderTutorialStep(); }
+  else closeTutorial();
+});
+
 const authOverlay = document.getElementById('authOverlay');
 const authTitle = document.getElementById('authTitle');
 const authError = document.getElementById('authError');
@@ -87,6 +137,14 @@ const guildMineInfoEl = document.getElementById('guildMineInfo');
 const guildInviteRowEl = document.getElementById('guildInviteRow');
 const guildPendingAreaEl = document.getElementById('guildPendingArea');
 const guildMemberAreaEl = document.getElementById('guildMemberArea');
+
+const marketPanelEl = document.getElementById('marketPanel');
+const marketGoldEl = document.getElementById('marketGold');
+const marketItemSelectEl = document.getElementById('marketItemSelect');
+const marketQtyInputEl = document.getElementById('marketQtyInput');
+const marketPriceInputEl = document.getElementById('marketPriceInput');
+const marketListEl = document.getElementById('marketList');
+let lastMarketListings = [];
 
 const ELEMENT_LABEL = { none: '무속성', fire: '화속성', ice: '빙속성' };
 let selfGold = 0;
@@ -759,6 +817,69 @@ document.getElementById('guildInviteBtn').addEventListener('click', () => {
   input.value = '';
 });
 
+// ── 거래장터 — 인벤토리 아이템을 등록하면 다른 유저가 아무 때나 사서 갈 수 있음 ──
+function marketSellableItems() {
+  return selfInventory.filter(i => i.kind === 'material' || i.kind === 'potion' || i.kind === 'weapon');
+}
+function renderMarketSellForm() {
+  const items = marketSellableItems();
+  marketItemSelectEl.innerHTML = '';
+  if (!items.length) {
+    const opt = document.createElement('option');
+    opt.textContent = '등록할 아이템이 없습니다';
+    opt.disabled = true;
+    marketItemSelectEl.appendChild(opt);
+    return;
+  }
+  for (const item of items) {
+    const opt = document.createElement('option');
+    opt.value = item.id;
+    const qtyLabel = item.kind === 'weapon' ? '' : ` ×${item.qty}`;
+    opt.textContent = `${item.name}${qtyLabel}`;
+    marketItemSelectEl.appendChild(opt);
+  }
+}
+function renderMarketPanel(data) {
+  marketPanelEl.classList.remove('hidden');
+  marketGoldEl.textContent = data.gold;
+  lastMarketListings = data.listings;
+  renderMarketSellForm();
+  marketListEl.innerHTML = '';
+  if (!data.listings.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-hint';
+    empty.textContent = '등록된 아이템이 없습니다.';
+    marketListEl.appendChild(empty);
+    return;
+  }
+  for (const l of data.listings) {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    const qtyLabel = l.kind === 'weapon' ? '' : ` ×${l.qty}`;
+    row.innerHTML = `<div class="desc"><div class="name">${l.name}${qtyLabel}</div><div class="sub">${l.mine ? '내 등록' : escapeHtml(l.sellerNickname)} · ${l.price}G</div></div>`;
+    const btn = document.createElement('button');
+    if (l.mine) {
+      btn.textContent = '취소';
+      btn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'market_cancel', listingId: l.id })));
+    } else {
+      btn.textContent = '구매';
+      btn.disabled = selfGold < l.price;
+      btn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'market_buy', listingId: l.id })));
+    }
+    row.appendChild(btn);
+    marketListEl.appendChild(row);
+  }
+}
+document.getElementById('marketCloseBtn').addEventListener('click', () => marketPanelEl.classList.add('hidden'));
+document.getElementById('marketSellBtn').addEventListener('click', () => {
+  const itemId = marketItemSelectEl.value;
+  const price = parseInt(marketPriceInputEl.value, 10);
+  const qty = parseInt(marketQtyInputEl.value, 10) || 1;
+  if (!itemId || !price || price <= 0) { showBanner('가격을 올바르게 입력해주세요'); return; }
+  ws.send(JSON.stringify({ type: 'market_sell', itemId, qty, price }));
+  marketPriceInputEl.value = '';
+});
+
 function renderInventoryPanel() {
   if (!showInventory) { inventoryPanelEl.classList.add('hidden'); return; }
   inventoryPanelEl.classList.remove('hidden');
@@ -961,7 +1082,7 @@ ws.addEventListener('message', ev => {
       spawnSparks(hit.x, hit.y, hit.defeated ? '#ff9a4e' : '#ffe9a8', hit.defeated ? 12 : 7);
       if (hit.defeated) {
         anyKill = true;
-        if (!hit.isBoss) spawnFloatText(hit.x, hit.y - 34, `+${hit.exp} EXP · ${hit.materialName} 획득`, '#8fd6ff', 1.3);
+        if (!hit.isBoss) spawnFloatText(hit.x, hit.y - 34, `+${hit.exp} EXP · +${hit.goldGain}G · ${hit.materialName} 획득`, '#8fd6ff', 1.3);
       }
     }
     if (msg.hits.length) {
@@ -1033,7 +1154,7 @@ ws.addEventListener('message', ev => {
     raidLobbyPanelEl.classList.add('hidden');
     showBanner('레이드 시작!');
   } else if (msg.type === 'raid_win') {
-    showBanner(`${msg.bossName} 처치! +${msg.exp} EXP · ${msg.materialName} 획득`);
+    showBanner(`${msg.bossName} 처치! +${msg.exp} EXP · +${msg.goldGain}G · ${msg.materialName} 획득`);
   } else if (msg.type === 'inventory') {
     selfGold = msg.gold;
     selfWeapon = msg.weapon;
@@ -1041,6 +1162,7 @@ ws.addEventListener('message', ev => {
     if (showInventory) renderInventoryPanel();
     if (!blacksmithPanelEl.classList.contains('hidden')) renderBlacksmithPanel(selfWeapon, selfGold);
     if (!shopPanelEl.classList.contains('hidden') && lastShopCatalog) renderShopPanel(lastShopCatalog, selfGold);
+    if (!marketPanelEl.classList.contains('hidden')) renderMarketSellForm();
   } else if (msg.type === 'shop_open') {
     lastShopCatalog = msg.catalog;
     if (typeof msg.hasMap === 'boolean') hasMap = msg.hasMap;
@@ -1080,6 +1202,7 @@ ws.addEventListener('message', ev => {
     myGuild = msg.guild || null;
     myIsGuildOwner = !!msg.isGuildOwner;
     hasMap = !!msg.hasMap;
+    hasSeenTutorial = !!msg.hasSeenTutorial;
     if (msg.hasChosenClass) {
       currentClass = msg.classKey;
       hasChosenClassEver = true;
@@ -1088,6 +1211,7 @@ ws.addEventListener('message', ev => {
       classSelectOverlay.classList.add('hidden');
       classReadout.textContent = CLASS_DEFS[msg.classKey].name;
       updateSkillReadouts();
+      if (!hasSeenTutorial) showTutorial();
     } else {
       classSelectOverlay.classList.remove('hidden');
     }
@@ -1106,6 +1230,7 @@ ws.addEventListener('message', ev => {
     updateSkillReadouts();
     if (typeof msg.gold === 'number') { selfGold = msg.gold; goldReadout.textContent = selfGold; }
     updateClassCardLabels();
+    if (!hasSeenTutorial) showTutorial();
   } else if (msg.type === 'class_change_denied') {
     showBanner(msg.reason);
   } else if (msg.type === 'stats_update') {
@@ -1126,6 +1251,9 @@ ws.addEventListener('message', ev => {
       const catalog = Object.entries(SKILL_DEFS).filter(([, d]) => d.classKey === currentClass).map(([key, d]) => ({ key, ...d }));
       renderSkillShopPanel(catalog, ownedSkills, equippedSkills, selfGold);
     }
+  } else if (msg.type === 'market_data') {
+    selfGold = msg.gold;
+    renderMarketPanel(msg);
   } else if (msg.type === 'guild_hall_open') {
     renderGuildHallPanel(msg);
   } else if (msg.type === 'guild_status') {
@@ -1363,7 +1491,7 @@ function drawPortalLabel(x, y, text, color) {
   ctx.fillText(text, x, y);
 }
 
-const BUILDING_TYPES = new Set(['shop', 'blacksmith', 'skill_shop', 'guild_hall', 'raid_list']);
+const BUILDING_TYPES = new Set(['shop', 'blacksmith', 'skill_shop', 'guild_hall', 'raid_list', 'market']);
 function drawNpcSprite(x, y) {
   ctx.save();
   ctx.translate(x, y);
@@ -1687,6 +1815,7 @@ const BUILDING_PALETTES = {
   skill_shop: { R: '#6a3d9e', W: '#e0d8ec', w: '#c9a8f0', D: '#4a2a6e' },
   guild_hall: { R: '#a88a2f', W: '#e6dcc0', w: '#e8c878', D: '#6e5420' },
   raid_list: { R: '#7a4a3a', W: '#d9c8a8', w: '#e0857a', D: '#5a3a28' },
+  market: { R: '#2f8a5a', W: '#e0e6c8', w: '#ffe27a', D: '#3a5a2a' },
 };
 
 function drawBuilding(cx, cy, kind) {

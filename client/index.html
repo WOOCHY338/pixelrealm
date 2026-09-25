@@ -222,6 +222,28 @@
     50% { transform: scale(1.06); }
   }
 
+  #tutorialOverlay {
+    position: fixed; inset: 0; z-index: 65;
+    background: rgba(8, 9, 15, 0.85);
+    display: flex; align-items: center; justify-content: center;
+    color: #e8e9f5;
+  }
+  #tutorialOverlay.hidden { display: none; }
+  #tutorialBox { width: 380px; background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 22px; }
+  #tutorialBox h2 { margin: 0 0 4px; font-size: 12px; color: #8fd6ff; letter-spacing: 1px; }
+  #tutorialBox h3 { margin: 4px 0 12px; font-size: 18px; }
+  #tutorialBox p { font-size: 13px; line-height: 1.6; color: #cfd2e6; min-height: 62px; }
+  #tutorialDots { display: flex; gap: 6px; justify-content: center; margin: 12px 0 16px; }
+  #tutorialDots span { width: 7px; height: 7px; border-radius: 50%; background: #3a3c54; }
+  #tutorialDots span.active { background: #7ecb9e; }
+  #tutorialBox .row { display: flex; gap: 8px; }
+  #tutorialBox button {
+    flex: 1; padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
+    border: 2px solid #565a80; border-radius: 4px; cursor: pointer;
+  }
+  #tutorialBox button:hover { background: #43466a; }
+  #tutorialBox #tutorialSkipBtn { background: transparent; border-color: transparent; color: #9aa0c0; flex: 0 0 auto; }
+
   #authOverlay {
     position: fixed; inset: 0; z-index: 60;
     background: rgba(8, 9, 15, 0.96);
@@ -245,8 +267,16 @@
   #authNicknameRow { display: none; }
   #authNicknameRow.show { display: block; }
 
-  #statPanel, #skillShopPanel, #guildHallPanel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; }
-  #statPanel h3, #skillShopPanel h3, #guildHallPanel h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
+  #statPanel, #skillShopPanel, #guildHallPanel, #marketPanel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; }
+  #statPanel h3, #skillShopPanel h3, #guildHallPanel h3, #marketPanel h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
+  #marketPanel { max-height: 80vh; overflow-y: auto; }
+  #marketSellForm { background: #23253a; border: 1px solid #3a3c54; border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+  #marketSellForm select, #marketSellForm input {
+    width: 100%; box-sizing: border-box; margin-bottom: 6px; padding: 7px 8px; font-size: 12px;
+    background: #171826; color: #e8e9f5; border: 1px solid #3a3c54; border-radius: 4px;
+  }
+  #marketSellForm button { width: 100%; padding: 8px; font-size: 12px; background: #3d5a80; color: #e8e9f5; border: none; border-radius: 4px; cursor: pointer; }
+  #marketListLabel { font-size: 12px; color: #9aa0c0; margin: 8px 0 6px; }
   .stat-row { display: flex; align-items: center; justify-content: space-between; background: #23253a; border: 1px solid #3a3c54; border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; }
   .stat-row button { padding: 4px 10px; font-size: 12px; background: #3d5a80; color: #e8e9f5; border: none; border-radius: 4px; cursor: pointer; }
   .stat-row button:disabled { opacity: 0.35; cursor: default; }
@@ -274,6 +304,19 @@
   <div id="gameOverOverlay" class="hidden">
     <h1>GAME OVER</h1>
     <p>마을에서 부활합니다...</p>
+  </div>
+  <div id="tutorialOverlay" class="hidden">
+    <div id="tutorialBox">
+      <h2 id="tutorialStepLabel">TUTORIAL 1/7</h2>
+      <h3 id="tutorialTitle"></h3>
+      <p id="tutorialBody"></p>
+      <div id="tutorialDots"></div>
+      <div class="row">
+        <button id="tutorialSkipBtn">건너뛰기</button>
+        <button id="tutorialPrevBtn">이전</button>
+        <button id="tutorialNextBtn">다음</button>
+      </div>
+    </div>
   </div>
   <div id="authOverlay">
     <div id="authBox">
@@ -419,6 +462,19 @@
         <button class="close" id="guildLeaveBtn">길드 탈퇴</button>
       </div>
       <button class="close" id="guildHallCloseBtn">닫기</button>
+    </div>
+
+    <div id="marketPanel" class="panel hidden">
+      <h3><span>거래장터</span><span>골드: <b id="marketGold">0</b></span></h3>
+      <div id="marketSellForm">
+        <select id="marketItemSelect"></select>
+        <input id="marketQtyInput" type="number" min="1" value="1" placeholder="수량" />
+        <input id="marketPriceInput" type="number" min="1" placeholder="가격(골드)" />
+        <button id="marketSellBtn">등록하기</button>
+      </div>
+      <div id="marketListLabel">등록된 아이템</div>
+      <div id="marketList" class="item-list"></div>
+      <button class="close" id="marketCloseBtn">닫기</button>
     </div>
 
     <div id="chatLog"></div>

@@ -96,7 +96,7 @@ function makeNewUser(username, password, nickname) {
     level: 1, exp: 0, gold: 50, statPoints: 0, stats: { hp: 0, speed: 0, dmg: 0, magic: 0 },
     weapon: makeStarterWeapon(), inventory: [],
     ownedSkills: [], equippedSkills: [null, null],
-    guildId: null, hasMap: false,
+    guildId: null, hasMap: false, hasSeenTutorial: false,
   };
 }
 
@@ -113,6 +113,34 @@ function publicGuild(g) {
 function applyGuildTag(player) {
   const guild = player.user.guildId ? guilds.get(player.user.guildId) : null;
   player.guildTag = guild ? guild.name : null;
+}
+
+// ── 거래장터 — market.json에 영구 저장. 판매자가 오프라인이어도 등록/구매는 그대로 유지됨 ──
+const MARKET_FILE = new URL('./market.json', import.meta.url);
+let marketListings = new Map();
+try { marketListings = new Map(Object.entries(JSON.parse(fs.readFileSync(MARKET_FILE, 'utf8')))); } catch { /* 최초 실행 */ }
+let nextMarketId = 1 + [...marketListings.keys()].reduce((max, k) => Math.max(max, parseInt(k.slice(2), 10) || 0), 0);
+function saveMarket() {
+  try { fs.writeFileSync(MARKET_FILE, JSON.stringify(Object.fromEntries(marketListings))); } catch (e) { console.error('market.json 저장 실패', e); }
+}
+function grantMarketItem(player, listing) {
+  if (listing.kind === 'material') {
+    const existing = player.inventory.find(i => i.kind === 'material' && i.key === listing.key);
+    if (existing) existing.qty += listing.qty;
+    else player.inventory.push({ id: 'm' + (nextItemId++), kind: 'material', key: listing.key, name: listing.name, price: listing.priceHint || 1, qty: listing.qty });
+  } else if (listing.kind === 'potion') {
+    const existing = player.inventory.find(i => i.kind === 'potion' && i.key === listing.key);
+    if (existing) existing.qty += listing.qty;
+    else player.inventory.push({ id: 'p' + (nextItemId++), kind: 'potion', key: listing.key, name: listing.name, heal: listing.heal, qty: listing.qty });
+  } else if (listing.kind === 'weapon') {
+    player.inventory.push({ id: 'w' + (nextItemId++), kind: 'weapon', key: listing.key, name: listing.name, atkBonus: listing.atkBonus, durability: listing.durability, maxDurability: listing.maxDurability, element: listing.element, enhanceLevel: listing.enhanceLevel });
+  }
+}
+function sendMarketData(player) {
+  const listings = [...marketListings.values()]
+    .map(l => ({ id: l.id, sellerNickname: l.sellerNickname, kind: l.kind, key: l.key, name: l.name, qty: l.qty, price: l.price, mine: l.sellerUsername === player.username, listedAt: l.listedAt }))
+    .sort((a, b) => (b.mine - a.mine) || (b.listedAt - a.listedAt));
+  sendTo(player, { type: 'market_data', listings, gold: player.gold });
 }
 
 // 직업 기본 스탯 + 유저가 찍은 스텟 포인트를 합쳐서 실제 전투 스탯을 다시 계산
@@ -351,6 +379,7 @@ const WORLD_PORTALS = [
   { id: 'blacksmith_capital', x: S(2760), y: S(2350), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
   { id: 'skillshop_capital', x: S(1900), y: S(2460), w: 140, h: 60, label: '스킬 상점', action: { type: 'skill_shop' } },
   { id: 'guildhall_capital', x: S(2760), y: S(2460), w: 140, h: 60, label: '마을 회관', action: { type: 'guild_hall' } },
+  { id: 'market_capital', x: S(2330), y: S(2460), w: 140, h: 60, label: '거래장터', action: { type: 'market' } },
   // 변방 도시
   ...layoutRow(S(800), S(3550), [
     { id: 'raid_field3', label: '습지 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field3' } },
@@ -361,6 +390,7 @@ const WORLD_PORTALS = [
   { id: 'blacksmith_frontier', x: S(1140), y: S(3950), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
   { id: 'skillshop_frontier', x: S(280), y: S(4060), w: 140, h: 60, label: '스킬 상점', action: { type: 'skill_shop' } },
   { id: 'guildhall_frontier', x: S(1140), y: S(4060), w: 140, h: 60, label: '마을 회관', action: { type: 'guild_hall' } },
+  { id: 'market_frontier', x: S(710), y: S(4060), w: 140, h: 60, label: '거래장터', action: { type: 'market' } },
   // NPC — 퀘스트를 주는 마을 주민들
   { id: 'npc_capital_1', x: S(1950), y: S(2620), w: 100, h: 60, label: '촌장', action: { type: 'npc', npcId: 'npc_capital_1' } },
   { id: 'npc_capital_2', x: S(2750), y: S(2620), w: 100, h: 60, label: '용병', action: { type: 'npc', npcId: 'npc_capital_2' } },
@@ -563,9 +593,15 @@ function round1(v) { return Math.round(v * 10) / 10; }
 
 // ── 아이템 / 경제 ───────────────────────────────────────
 const WEAPON_CATALOG = {
+  silverSword: { name: '실버 소드', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
+  goldSword: { name: '골드 소드', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
   flameSword: { name: '화염검', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
   frostSword: { name: '빙결검', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
   steelSword: { name: '강철검', atkBonus: 4, maxDurability: 50, element: 'none', price: 120 },
+  diamondSword: { name: '다이아 소드', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
+  radiantSword: { name: '레디언트 소드', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
+  windBreathSword: { name: '바람의 숨결', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
+  masterySword: { name: '마스터리 소드', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
 };
 const POTION_CATALOG = {
   healthPotion: { name: '체력 물약', heal: 20, price: 15 },
@@ -831,6 +867,8 @@ function checkPortals(player, room, now) {
     });
   } else if (matched.action.type === 'npc') {
     sendNpcDialogue(player, matched.action.npcId);
+  } else if (matched.action.type === 'market') {
+    sendMarketData(player);
   }
 }
 
@@ -1056,13 +1094,17 @@ function applyHitToMonster(room, player, m, dmg, now) {
     hit.defeated = true;
     hit.exp = m.exp;
     hit.materialName = MATERIAL_INFO[m.kind]?.name;
+    const goldGain = Math.max(2, Math.round(m.exp * 0.5));
+    hit.goldGain = goldGain;
     if (m.isBoss) {
       for (const p of room.players.values()) {
         p.exp = (p.exp || 0) + m.exp;
         applyLevelUps(p);
         addMaterial(p, m.kind);
+        p.gold += goldGain;
+        syncGold(p);
         sendInventory(p);
-        sendTo(p, { type: 'raid_win', bossName: m.name, exp: m.exp, materialName: hit.materialName });
+        sendTo(p, { type: 'raid_win', bossName: m.name, exp: m.exp, goldGain, materialName: hit.materialName });
       }
       room.monsters.delete(m.id);
       room.boss = null;
@@ -1077,6 +1119,8 @@ function applyHitToMonster(room, player, m, dmg, now) {
       player.exp = (player.exp || 0) + m.exp;
       applyLevelUps(player);
       addMaterial(player, m.kind);
+      player.gold += goldGain;
+      syncGold(player);
       sendInventory(player);
       if (player.user && player.user.quests) {
         for (const [qid, q] of Object.entries(player.user.quests)) {
@@ -1387,7 +1431,7 @@ function spawnPlayerForUser(ws, user) {
     type: 'auth_ok', username: user.username, nickname: user.nickname,
     hasChosenClass: user.hasChosenClass, classKey: user.classKey,
     level: user.level, gold: user.gold, statPoints: user.statPoints, stats: user.stats,
-    ownedSkills: user.ownedSkills, equippedSkills: user.equippedSkills, hasMap: !!user.hasMap,
+    ownedSkills: user.ownedSkills, equippedSkills: user.equippedSkills, hasMap: !!user.hasMap, hasSeenTutorial: !!user.hasSeenTutorial,
     guild: guild ? publicGuild(guild) : null, isGuildOwner: !!(guild && guild.ownerUsername === user.username),
   });
   sendTo(player, { type: 'welcome', id, tickMs: 1000 / TICK_RATE, self: { hp: player.hp, maxHp: player.maxHp, level: player.level } });
@@ -1642,6 +1686,70 @@ wss.on('connection', ws => {
       player.inventory.splice(idx, 1);
       syncGold(player);
       sendInventory(player);
+    } else if (msg.type === 'tutorial_done') {
+      player.user.hasSeenTutorial = true;
+      saveUsers();
+    } else if (msg.type === 'market_sell' || msg.type === 'market_buy' || msg.type === 'market_cancel') {
+      const room = rooms.get(player.roomId);
+      if (!room) return;
+      const inMarket = room.portals.some(p => p.action.type === 'market' &&
+        player.x >= p.x && player.x <= p.x + p.w && player.y >= p.y && player.y <= p.y + p.h);
+      if (!inMarket) return;
+
+      if (msg.type === 'market_sell') {
+        const idx = player.inventory.findIndex(i => i.id === msg.itemId);
+        if (idx === -1) return;
+        const item = player.inventory[idx];
+        const price = Math.max(1, Math.round(Number(msg.price) || 0));
+        if (!price) { sendTo(player, { type: 'shop_error', reason: '가격을 입력해주세요' }); return; }
+        let listQty, listedItem;
+        if (item.kind === 'material' || item.kind === 'potion') {
+          listQty = Math.max(1, Math.min(item.qty, Math.round(Number(msg.qty) || 1)));
+          listedItem = { kind: item.kind, key: item.key, name: item.name };
+          if (item.kind === 'potion') listedItem.heal = item.heal;
+          if (item.kind === 'material') listedItem.priceHint = item.price;
+          item.qty -= listQty;
+          if (item.qty <= 0) player.inventory.splice(idx, 1);
+        } else if (item.kind === 'weapon') {
+          listQty = 1;
+          listedItem = { kind: 'weapon', key: item.key, name: item.name, atkBonus: item.atkBonus, durability: item.durability, maxDurability: item.maxDurability, element: item.element, enhanceLevel: item.enhanceLevel };
+          player.inventory.splice(idx, 1);
+        } else {
+          return;
+        }
+        const id = 'mk' + (nextMarketId++);
+        marketListings.set(id, { id, sellerUsername: player.username, sellerNickname: player.name, ...listedItem, qty: listQty, price, listedAt: Date.now() });
+        saveMarket();
+        sendInventory(player);
+        sendMarketData(player);
+      } else if (msg.type === 'market_buy') {
+        const listing = marketListings.get(msg.listingId);
+        if (!listing) { sendTo(player, { type: 'shop_error', reason: '이미 판매되었거나 취소된 아이템입니다' }); return; }
+        if (listing.sellerUsername === player.username) { sendTo(player, { type: 'shop_error', reason: '자신이 등록한 아이템은 구매할 수 없습니다' }); return; }
+        if (player.gold < listing.price) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
+        player.gold -= listing.price;
+        syncGold(player);
+        grantMarketItem(player, listing);
+        marketListings.delete(listing.id);
+        saveMarket();
+        const seller = users.get(listing.sellerUsername);
+        if (seller) {
+          seller.gold = (seller.gold || 0) + listing.price;
+          saveUsers();
+          const sellerPlayer = [...playersByWs.values()].find(p => p.username === listing.sellerUsername);
+          if (sellerPlayer) { sellerPlayer.gold = seller.gold; sendInventory(sellerPlayer); }
+        }
+        sendInventory(player);
+        sendMarketData(player);
+      } else if (msg.type === 'market_cancel') {
+        const listing = marketListings.get(msg.listingId);
+        if (!listing || listing.sellerUsername !== player.username) return;
+        grantMarketItem(player, listing);
+        marketListings.delete(listing.id);
+        saveMarket();
+        sendInventory(player);
+        sendMarketData(player);
+      }
     } else if (msg.type === 'raid_start') {
       const room = rooms.get(player.roomId);
       if (!room || room.kind !== 'world' || !player.raidEntranceZone) return;

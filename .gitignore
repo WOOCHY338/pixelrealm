@@ -4,3 +4,4 @@ node_modules/
 server/users.json
 server/guilds.json
 server/accounts.json
+server/market.json
