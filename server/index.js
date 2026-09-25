@@ -1,8 +1,12 @@
 import { WebSocketServer } from 'ws';
 import fs from 'fs';
 import crypto from 'crypto';
+import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import * as db from './db.js';
 
-const PORT = 8766;
+const PORT = process.env.PORT || 8765;
 const TICK_RATE = 30;
 // 진짜 오픈월드처럼 — 지역 하나하나와 지역 사이 거리를 전부 2배로 키움
 const WORLD_SCALE = 2;
@@ -75,14 +79,12 @@ function starterSkillFor(classKey) {
 // 레벨업 시 얻는 스텟 포인트로 찍는 능력치 — 계정(유저)당 영구 저장
 const STAT_INCREMENTS = { hp: 5, speed: 8, dmg: 1, magic: 1 };
 
-// ── 계정(회원가입/로그인) — users.json에 영구 저장, 비밀번호는 salt+scrypt 해시로만 보관 ──
-const USERS_FILE = new URL('./users.json', import.meta.url);
-let users = new Map();
-try { users = new Map(Object.entries(JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')))); } catch { /* 최초 실행 */ }
+// ── 계정(회원가입/로그인) — Supabase(있으면) 또는 users.json에 영구 저장, 비밀번호는 salt+scrypt 해시로만 보관 ──
+let users = await db.loadUsers();
 // 서버 재시작/비정상 종료 시 이전 세션의 online 플래그가 그대로 남아 재접속이 막히는 것을 방지
 for (const u of users.values()) u.online = false;
 function saveUsers() {
-  try { fs.writeFileSync(USERS_FILE, JSON.stringify(Object.fromEntries(users))); } catch (e) { console.error('users.json 저장 실패', e); }
+  db.saveUsers(users);
 }
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
@@ -100,12 +102,10 @@ function makeNewUser(username, password, nickname) {
   };
 }
 
-// ── 길드 — guilds.json에 영구 저장. 이름과 가입 방식(공개/승인제)은 생성 후 변경 불가 ──
-const GUILDS_FILE = new URL('./guilds.json', import.meta.url);
-let guilds = new Map();
-try { guilds = new Map(Object.entries(JSON.parse(fs.readFileSync(GUILDS_FILE, 'utf8')))); } catch { /* 최초 실행 */ }
+// ── 길드 — 이름과 가입 방식(공개/승인제)은 생성 후 변경 불가 ──
+let guilds = await db.loadGuilds();
 function saveGuilds() {
-  try { fs.writeFileSync(GUILDS_FILE, JSON.stringify(Object.fromEntries(guilds))); } catch (e) { console.error('guilds.json 저장 실패', e); }
+  db.saveGuilds(guilds);
 }
 function publicGuild(g) {
   return { id: g.id, name: g.name, approvalRequired: g.approvalRequired, memberCount: g.members.length, ownerUsername: g.ownerUsername, ownerNickname: users.get(g.ownerUsername)?.nickname || g.ownerUsername };
@@ -115,13 +115,11 @@ function applyGuildTag(player) {
   player.guildTag = guild ? guild.name : null;
 }
 
-// ── 거래장터 — market.json에 영구 저장. 판매자가 오프라인이어도 등록/구매는 그대로 유지됨 ──
-const MARKET_FILE = new URL('./market.json', import.meta.url);
-let marketListings = new Map();
-try { marketListings = new Map(Object.entries(JSON.parse(fs.readFileSync(MARKET_FILE, 'utf8')))); } catch { /* 최초 실행 */ }
+// ── 거래장터 — 판매자가 오프라인이어도 등록/구매는 그대로 유지됨 ──
+let marketListings = await db.loadMarket();
 let nextMarketId = 1 + [...marketListings.keys()].reduce((max, k) => Math.max(max, parseInt(k.slice(2), 10) || 0), 0);
 function saveMarket() {
-  try { fs.writeFileSync(MARKET_FILE, JSON.stringify(Object.fromEntries(marketListings))); } catch (e) { console.error('market.json 저장 실패', e); }
+  db.saveMarket(marketListings);
 }
 function grantMarketItem(player, listing) {
   if (listing.kind === 'material') {
@@ -1444,8 +1442,27 @@ function spawnPlayerForUser(ws, user) {
   console.log(`+ ${player.name}(${user.username}) connected`);
 }
 
-const wss = new WebSocketServer({ port: PORT });
-console.log(`PixelRealm zone server listening on ws://localhost:${PORT}`);
+// ── 정적 파일(클라이언트) + WebSocket을 한 포트에서 같이 서빙 — 배포 시 서비스 하나로 끝나게 ──
+const CLIENT_DIR = fileURLToPath(new URL('../client/', import.meta.url));
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.md': 'text/plain; charset=utf-8',
+};
+function serveStatic(req, res) {
+  const reqPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  const filePath = path.join(CLIENT_DIR, reqPath === '/' ? 'index.html' : reqPath);
+  if (!filePath.startsWith(CLIENT_DIR)) { res.writeHead(403); res.end('Forbidden'); return; }
+  fs.readFile(filePath, (err, data) => {
+    if (err) { res.writeHead(404); res.end('Not found'); return; }
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
+    res.end(data);
+  });
+}
+const httpServer = http.createServer(serveStatic);
+const wss = new WebSocketServer({ server: httpServer });
+httpServer.listen(PORT, () => console.log(`PixelRealm listening on http://localhost:${PORT} (client + ws 같이 서빙)`));
 
 wss.on('connection', ws => {
   console.log('+ connection opened (awaiting login)');

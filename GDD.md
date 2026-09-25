@@ -556,3 +556,30 @@ pixelrealm/
 ### 튜토리얼
 - 계정당 최초로 직업을 선택한 직후(또는 이미 직업이 있는 기존 계정이 처음 접속했을 때) **7단계 튜토리얼 팝업**이 한 번 뜸 — 이동/공격, 스킬, 성장, 장비·거래(거래장터 소개 포함), 퀘스트·길드, 레이드, 지도 순서로 안내. "건너뛰기"로 언제든 닫을 수 있고, 한 번 보면 계정에 영구 기록되어 다시 안 뜸(`user.hasSeenTutorial`)
 - 실기 검증: 신규 계정으로 직업 선택 직후 튜토리얼이 뜨는 것, 7단계를 끝까지 넘기면 "시작하기"로 정상 종료되는 것 확인
+
+## 24. 배포 준비 — 정적 파일+WS 통합 서빙, Supabase 영속성 계층, gh CLI로 GitHub 푸시 (v2.4, 완료)
+
+### 깃허브 푸시
+- gh CLI 설치 + 로그인(계정 WOOCHY338) 완료, `pixelrealm` 저장소를 **공개(public)**로 생성해 전체 커밋 푸시 완료: https://github.com/WOOCHY338/pixelrealm
+- `.gitignore`에 실행 중 생성되는 계정/길드/거래장터 데이터 파일(`users.json`, `guilds.json`, `market.json`, `accounts.json`)과 `node_modules`는 계속 제외
+
+### 정적 파일(클라이언트) + WebSocket을 한 포트로 통합
+- 기존엔 클라이언트(정적 HTML/JS)는 Windows 전용 PowerShell 스크립트(`serve.ps1`)로 8765번, 게임 서버(WS)는 Node로 8766번 — 두 개의 서로 다른 프로세스/포트로 나뉘어 있었음. Render 같은 호스팅은 서비스 하나당 포트 하나만 열어주므로 이 구조로는 배포가 안 됨
+- `server/index.js`가 이제 Node의 `http` 서버로 `client/` 폴더를 직접 서빙하고, 같은 `http.Server`에 WebSocketServer를 붙여서(`{ server: httpServer }`) **정적 파일과 실시간 통신을 완전히 한 포트에서 처리**하도록 변경(로컬 기본 포트는 8765, 배포 환경에서는 `PORT` 환경변수를 그대로 따름)
+- `serve.ps1`은 이제 안 쓰여서 삭제, `.claude/launch.json`의 `pixelrealm-client` 설정도 통합 서버를 직접 실행하도록 변경
+- 클라이언트(`game.js`)의 WebSocket 접속 주소도 `location.protocol`/`location.port`를 그대로 따라가도록 바꿔서, 로컬이든 배포 환경(https)이든 페이지를 불러온 곳과 항상 같은 곳으로 자동 접속(수동으로 주소 안 바꿔도 됨)
+- 실기 검증: 통합 서버 기동 후 `http://localhost:8765/`에서 정적 파일·로그인·이동·거래장터 데이터(이전 세션에 등록한 골드 30G 등)까지 전부 정상 확인 — 리팩터링 후에도 기존 동작이 그대로 유지됨을 확인
+
+### Supabase 영속성 계층 (선택적 — 환경변수 없으면 기존 JSON 파일 그대로 동작)
+- `server/db.js`를 새로 만들어 계정/길드/거래장터 저장을 하나의 인터페이스(`loadUsers/saveUsers/loadGuilds/saveGuilds/loadMarket/saveMarket`)로 감쌈. **`SUPABASE_URL`과 `SUPABASE_SERVICE_KEY` 환경변수가 있으면 Supabase(Postgres)를 쓰고, 없으면 지금처럼 로컬 `users.json`/`guilds.json`/`market.json`으로 그대로 동작** — 로컬 개발은 Supabase 없이도 아무 변경 없이 계속 가능
+- `supabase/schema.sql`에 테이블 스키마(users/guilds/market_listings) 정리해둠 — Supabase 대시보드 SQL Editor에서 그대로 실행하면 끝
+- 서버는 `service_role` 키(비밀키, 절대 클라이언트/공개 저장소에 노출 금지)로만 접속하므로 RLS는 별도로 켜지 않음
+- 실기 검증: 이번엔 환경변수를 아직 설정하지 않아 **JSON 파일 경로만 라이브로 확인**함(회귀 없음 확인). Supabase 경로 자체는 사용자가 프로젝트를 만들고 URL/service_role 키를 전달해주면 이어서 연결하고 검증할 예정
+
+### Render 배포 준비
+- `render.yaml` 블루프린트 추가(`rootDir: server`, `npm install` → `node index.js`, `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`는 대시보드에서 직접 입력하도록 `sync: false`로 비워둠) — Render에서 이 저장소를 연결하면 대부분 자동으로 설정됨
+- 실제 배포(Render 계정 생성·저장소 연결·환경변수 입력)는 사용자가 직접 진행해야 하는 부분이라 아직 미완료
+
+### 의도적으로 이번에 하지 않은 것
+- Supabase 프로젝트 생성과 URL/service_role 키 전달은 사용자 몫 — 받는 대로 실제 Supabase 경로 연결해서 라이브 검증 예정
+- Render 배포 자체(계정 생성 필요)는 사용자가 진행, 필요하면 이어서 도와드릴 예정

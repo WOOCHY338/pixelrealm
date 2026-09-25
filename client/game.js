@@ -922,7 +922,10 @@ const RECLASS_COST = 3000;
 let hasChosenClassEver = false;
 let authMode = 'login'; // 'login' | 'signup'
 
-const ws = new WebSocket(`ws://${location.hostname}:8766`);
+// 클라이언트와 서버(ws)가 이제 같은 포트에서 같이 서빙됨 — 페이지를 불러온 origin 그대로 접속
+const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_PORT = location.port ? `:${location.port}` : '';
+const ws = new WebSocket(`${WS_PROTOCOL}//${location.hostname}${WS_PORT}`);
 
 ws.addEventListener('open', () => { statusEl.textContent = '연결됨'; });
 ws.addEventListener('close', () => { statusEl.textContent = '연결 끊김'; });
