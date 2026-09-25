@@ -193,6 +193,7 @@ function resizeCanvas() {
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
 
 let WORLD = { w: VIEW_W, h: VIEW_H, wallThickness: 24 };
 let landmarks = [];
@@ -449,11 +450,13 @@ function openChat() {
   chatInputBarEl.classList.remove('hidden');
   chatInputEl.value = '';
   chatInputEl.focus();
+  if (isTouchDevice) document.getElementById('touchControls').classList.remove('show');
 }
 function closeChat() {
   isChatting = false;
   chatInputBarEl.classList.add('hidden');
   chatInputEl.blur();
+  if (isTouchDevice) document.getElementById('touchControls').classList.add('show');
 }
 function sendChatMessage() {
   const text = chatInputEl.value.trim();
@@ -504,6 +507,103 @@ canvas.addEventListener('mousedown', e => {
   if (!classSelected) return;
   if (e.button === 0) sendAttack();
 });
+
+// ── 모바일 터치 컨트롤 — 왼쪽 가상 조이스틱(이동+방향) + 오른쪽 공격/스킬 버튼 ──
+const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+let manualFacing = null;
+if (isTouchDevice) {
+  document.getElementById('touchControls').classList.add('show');
+
+  const joystickBase = document.getElementById('touchJoystickBase');
+  const joystickKnob = document.getElementById('touchJoystickKnob');
+  const JOY_RADIUS = 46;
+  const JOY_DEADZONE = 12;
+  let joyTouchId = null;
+  let joyCenter = { x: 0, y: 0 };
+
+  function updateJoystickDirection(dx, dy) {
+    keys.delete('up'); keys.delete('down'); keys.delete('left'); keys.delete('right');
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOY_DEADZONE) {
+      const ang = Math.atan2(dy, dx);
+      manualFacing = ang;
+      if (Math.cos(ang) > 0.35) keys.add('right');
+      if (Math.cos(ang) < -0.35) keys.add('left');
+      if (Math.sin(ang) > 0.35) keys.add('down');
+      if (Math.sin(ang) < -0.35) keys.add('up');
+    }
+    sendInput();
+  }
+
+  function findTouch(e) { return [...e.changedTouches].find(t => t.identifier === joyTouchId); }
+
+  joystickBase.addEventListener('touchstart', e => {
+    ensureAudio(); retryPendingMusic();
+    if (!classSelected) return;
+    const touch = e.changedTouches[0];
+    joyTouchId = touch.identifier;
+    const rect = joystickBase.getBoundingClientRect();
+    joyCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    e.preventDefault();
+  }, { passive: false });
+  joystickBase.addEventListener('touchmove', e => {
+    if (joyTouchId === null) return;
+    const touch = findTouch(e);
+    if (!touch) return;
+    const dx = touch.clientX - joyCenter.x, dy = touch.clientY - joyCenter.y;
+    const dist = Math.min(JOY_RADIUS, Math.hypot(dx, dy));
+    const ang = Math.atan2(dy, dx);
+    joystickKnob.style.transform = `translate(${Math.cos(ang) * dist}px, ${Math.sin(ang) * dist}px)`;
+    updateJoystickDirection(dx, dy);
+    e.preventDefault();
+  }, { passive: false });
+  function joystickEnd(e) {
+    if (joyTouchId === null || !findTouch(e)) return;
+    joyTouchId = null;
+    joystickKnob.style.transform = '';
+    keys.delete('up'); keys.delete('down'); keys.delete('left'); keys.delete('right');
+    sendInput();
+    e.preventDefault();
+  }
+  joystickBase.addEventListener('touchend', joystickEnd, { passive: false });
+  joystickBase.addEventListener('touchcancel', joystickEnd, { passive: false });
+
+  function bindTapButton(el, onTap, repeat) {
+    let repeatTimer = null;
+    el.addEventListener('touchstart', e => {
+      ensureAudio(); retryPendingMusic();
+      e.preventDefault();
+      if (!classSelected) return;
+      onTap();
+      if (repeat) repeatTimer = setInterval(onTap, 220);
+    }, { passive: false });
+    const stop = e => { if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; } if (e) e.preventDefault(); };
+    el.addEventListener('touchend', stop, { passive: false });
+    el.addEventListener('touchcancel', stop, { passive: false });
+  }
+  bindTapButton(document.getElementById('touchAttackBtn'), sendAttack, true);
+  bindTapButton(document.getElementById('touchSkillEBtn'), () => sendSkill(0), false);
+  bindTapButton(document.getElementById('touchSkillRBtn'), () => sendSkill(1), false);
+
+  document.getElementById('touchInvBtn').addEventListener('touchstart', e => {
+    e.preventDefault();
+    showInventory = !showInventory; renderInventoryPanel();
+  }, { passive: false });
+  document.getElementById('touchStatBtn').addEventListener('touchstart', e => {
+    e.preventDefault();
+    statPanelEl.classList.toggle('hidden');
+    if (!statPanelEl.classList.contains('hidden')) renderStatPanel();
+  }, { passive: false });
+  document.getElementById('touchMapBtn').addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (hasMap) showFullMap = !showFullMap;
+    else showBanner('지도가 없습니다 — 상점에서 구매하세요');
+  }, { passive: false });
+  document.getElementById('touchChatBtn').addEventListener('touchstart', e => {
+    e.preventDefault();
+    openChat();
+  }, { passive: false });
+}
 
 document.getElementById('raidSoloBtn').addEventListener('click', () => {
   ws.send(JSON.stringify({ type: 'raid_start', mode: 'solo' }));
@@ -2418,8 +2518,12 @@ function updateSelf(dt, self) {
 
   self.renderX = self.predicted.x;
   self.renderY = self.predicted.y;
-  const worldMouseX = mouse.x + camera.x, worldMouseY = mouse.y + camera.y;
-  self.facing = Math.atan2(worldMouseY - self.renderY, worldMouseX - self.renderX);
+  if (isTouchDevice) {
+    if (manualFacing !== null) self.facing = manualFacing;
+  } else {
+    const worldMouseX = mouse.x + camera.x, worldMouseY = mouse.y + camera.y;
+    self.facing = Math.atan2(worldMouseY - self.renderY, worldMouseX - self.renderX);
+  }
   if (lastSentFacing === null || Math.abs(self.facing - lastSentFacing) > 0.03) {
     lastSentFacing = self.facing;
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'aim', facing: self.facing }));

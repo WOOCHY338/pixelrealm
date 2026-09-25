@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>PixelRealm — 월드1 테스트</title>
 <style>
   html, body {
@@ -12,6 +12,10 @@
     overflow: hidden;
     background: #14151c;
     font-family: -apple-system, "Malgun Gothic", sans-serif;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   #wrap {
     width: 100%;
@@ -28,6 +32,44 @@
     background: #bfe0f2;
     image-rendering: pixelated;
     cursor: crosshair;
+    touch-action: none;
+  }
+
+  /* ── 모바일 터치 컨트롤 — JS가 터치 기기를 감지했을 때만 보여줌 ── */
+  #touchControls { display: none; }
+  #touchControls.show { display: block; }
+  #touchJoystickBase {
+    position: fixed; left: 26px; bottom: 26px;
+    width: 116px; height: 116px; border-radius: 50%;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25);
+    touch-action: none; z-index: 40;
+  }
+  #touchJoystickKnob {
+    position: absolute; left: 50%; top: 50%;
+    width: 52px; height: 52px; margin: -26px 0 0 -26px;
+    border-radius: 50%; background: rgba(255,255,255,0.35); border: 2px solid rgba(255,255,255,0.5);
+    pointer-events: none;
+  }
+  .touch-action-btn {
+    position: fixed; border-radius: 50%;
+    background: rgba(224,85,78,0.5); border: 2px solid rgba(255,255,255,0.4);
+    color: #fff; font-size: 13px; font-weight: bold; text-align: center;
+    display: flex; align-items: center; justify-content: center;
+    touch-action: none; z-index: 40; user-select: none;
+  }
+  #touchAttackBtn { right: 26px; bottom: 34px; width: 84px; height: 84px; font-size: 22px; }
+  #touchSkillEBtn { right: 128px; bottom: 96px; width: 58px; height: 58px; background: rgba(61,90,128,0.6); }
+  #touchSkillRBtn { right: 40px; bottom: 150px; width: 58px; height: 58px; background: rgba(61,90,128,0.6); }
+  #touchMenuRow { position: fixed; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 40; }
+  #touchMenuRow button {
+    width: 40px; height: 40px; border-radius: 8px; font-size: 17px;
+    background: rgba(23,24,38,0.75); border: 1px solid rgba(255,255,255,0.25); color: #fff;
+    touch-action: none;
+  }
+  .touch-action-btn:active, #touchMenuRow button:active { background: rgba(255,255,255,0.3); }
+  @media (max-width: 640px) {
+    #hud .desktop-hint { display: none; }
+    #hud { font-size: 11px; padding: 4px 8px 4px 4px; }
   }
   #hud {
     position: fixed;
@@ -58,7 +100,7 @@
 
   #raidPrompt {
     top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 280px; text-align: center;
+    width: min(280px, 92vw); text-align: center;
   }
   #raidPrompt h3 { margin: 0 0 12px; font-size: 15px; }
   #raidPrompt .row { display: flex; flex-direction: column; gap: 8px; }
@@ -71,7 +113,7 @@
 
   #raidBrowser {
     top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 340px;
+    width: min(340px, 92vw);
   }
   #raidBrowser h3 { margin: 0 0 10px; font-size: 15px; }
   #raidRoomList { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; margin-bottom: 10px; }
@@ -101,7 +143,8 @@
 
   #shopPanel, #blacksmithPanel, #inventoryPanel {
     top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 380px;
+    width: min(380px, 92vw);
+    max-height: 88vh; overflow-y: auto;
   }
   #shopPanel h3, #blacksmithPanel h3, #inventoryPanel h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
   .item-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; margin-bottom: 10px; }
@@ -134,7 +177,7 @@
   #chatLog {
     position: fixed;
     left: 12px; bottom: 40px;
-    width: 320px; max-height: 160px;
+    width: min(320px, 70vw); max-height: 160px;
     overflow-y: auto;
     display: flex; flex-direction: column; gap: 2px;
     pointer-events: none;
@@ -154,7 +197,7 @@
   #chatInputBar {
     position: fixed;
     left: 12px; bottom: 40px;
-    width: 320px;
+    width: min(320px, 70vw);
   }
   #chatInputBar.hidden { display: none; }
   #chatInput {
@@ -229,7 +272,7 @@
     color: #e8e9f5;
   }
   #tutorialOverlay.hidden { display: none; }
-  #tutorialBox { width: 380px; background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 22px; }
+  #tutorialBox { width: min(380px, 92vw); background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 22px; box-sizing: border-box; }
   #tutorialBox h2 { margin: 0 0 4px; font-size: 12px; color: #8fd6ff; letter-spacing: 1px; }
   #tutorialBox h3 { margin: 4px 0 12px; font-size: 18px; }
   #tutorialBox p { font-size: 13px; line-height: 1.6; color: #cfd2e6; min-height: 62px; }
@@ -251,7 +294,7 @@
     color: #e8e9f5;
   }
   #authOverlay.hidden { display: none; }
-  #authBox { width: 300px; background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 24px; }
+  #authBox { width: min(300px, 92vw); background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 24px; box-sizing: border-box; }
   #authBox h2 { margin: 0 0 16px; font-size: 18px; text-align: center; }
   #authBox input {
     width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 9px 10px; font-size: 13px;
@@ -267,7 +310,7 @@
   #authNicknameRow { display: none; }
   #authNicknameRow.show { display: block; }
 
-  #statPanel, #skillShopPanel, #guildHallPanel, #marketPanel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; }
+  #statPanel, #skillShopPanel, #guildHallPanel, #marketPanel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(400px, 92vw); max-height: 88vh; overflow-y: auto; box-sizing: border-box; }
   #statPanel h3, #skillShopPanel h3, #guildHallPanel h3, #marketPanel h3 { margin: 0 0 10px; font-size: 15px; display: flex; justify-content: space-between; }
   #marketPanel { max-height: 80vh; overflow-y: auto; }
   #marketSellForm { background: #23253a; border: 1px solid #3a3c54; border-radius: 6px; padding: 10px; margin-bottom: 12px; }
@@ -483,7 +526,7 @@
     </div>
   </div>
   <div id="hud">
-    이동: <b>WASD</b> · 공격: <b>클릭/스페이스</b> · 스킬: <b>E/R</b> · 인벤토리: <b>B</b> · 스텟: <b>C</b> · 지도: <b>M</b> · 채팅: <b>Enter</b> &nbsp;|&nbsp;
+    <span class="desktop-hint">이동: <b>WASD</b> · 공격: <b>클릭/스페이스</b> · 스킬: <b>E/R</b> · 인벤토리: <b>B</b> · 스텟: <b>C</b> · 지도: <b>M</b> · 채팅: <b>Enter</b> &nbsp;|&nbsp;</span>
     서버: <b id="status">연결 중...</b> &nbsp;|&nbsp;
     구역: <b id="zoneReadout">-</b> &nbsp;|&nbsp;
     직업:<b id="classReadout">-</b> &nbsp;|&nbsp;
@@ -494,6 +537,18 @@
     <button id="musicToggleBtn">음악: 켜짐</button>
     <button id="changeClassBtn">직업 변경</button>
     <button id="statPointsBtn">스텟 (0)</button>
+  </div>
+  <div id="touchControls">
+    <div id="touchJoystickBase"><div id="touchJoystickKnob"></div></div>
+    <div id="touchSkillEBtn" class="touch-action-btn">E</div>
+    <div id="touchSkillRBtn" class="touch-action-btn">R</div>
+    <div id="touchAttackBtn" class="touch-action-btn">⚔</div>
+    <div id="touchMenuRow">
+      <button id="touchInvBtn">🎒</button>
+      <button id="touchStatBtn">📊</button>
+      <button id="touchMapBtn">🗺️</button>
+      <button id="touchChatBtn">💬</button>
+    </div>
   </div>
 </div>
 <script src="game.js"></script>
