@@ -583,3 +583,13 @@ pixelrealm/
 ### 의도적으로 이번에 하지 않은 것
 - Supabase 프로젝트 생성과 URL/service_role 키 전달은 사용자 몫 — 받는 대로 실제 Supabase 경로 연결해서 라이브 검증 예정
 - Render 배포 자체(계정 생성 필요)는 사용자가 진행, 필요하면 이어서 도와드릴 예정
+
+## 25. Render 실배포 완료 (v2.5, 완료)
+
+- 사용자가 Render 계정 생성 후, Render CLI 설치·로그인(디바이스 코드 방식) → `render services create`로 `pixelrealm` 웹 서비스 생성 → 첫 배포까지 전부 완료
+- **실제 플레이 가능한 주소: https://pixelrealm-1z77.onrender.com**
+- 루트 디렉터리 `server`, 빌드 `npm install`, 시작 `node index.js`로 설정(로컬과 동일 명령), GitHub `master` 브랜치에 푸시할 때마다 자동 재배포(`autoDeploy: yes`)
+- 실기 검증: 배포된 주소에서 정적 파일 로딩 → 회원가입 → WebSocket 연결(wss://) → 직업 선택까지 실제 브라우저로 확인 완료
+
+### ⚠️ 중요 — 아직 남은 제약
+- 지금은 Supabase를 아직 연결 안 해서 **Render의 로컬 파일(users.json 등)에 저장 중인데, Render 무료 플랜은 재배포할 때마다 디스크가 초기화됨** — 즉 지금 이 주소에서 만든 계정은 다음 코드 푸시(재배포) 때 전부 사라짐. Supabase 프로젝트 URL/service_role 키를 넘겨주시면 영구 저장소로 바로 전환 예정
