@@ -10,6 +10,7 @@ const weaponReadout = document.getElementById('weaponReadout');
 const zoneReadout = document.getElementById('zoneReadout');
 const statusEl = document.getElementById('status');
 const bannerEl = document.getElementById('banner');
+const zoneBannerEl = document.getElementById('zoneBanner');
 const leaveRaidBtn = document.getElementById('leaveRaidBtn');
 
 const raidPromptEl = document.getElementById('raidPrompt');
@@ -207,7 +208,7 @@ let TICK_MS = 1000 / 30;
 const TILE = 32;
 const PLAYER_R = 14;
 const MONSTER_R = 12;
-const SPEED = 340; // 서버와 동일 — 맵이 커진 만큼 기본 이동속도도 올림(220 → 340)
+const SPEED = 290; // 서버와 동일 — 340은 너무 빨라서 살짝 낮춤(340 → 290)
 const MOVE_ACCEL = 1000;
 const MOVE_DECEL = 1500;
 const SWING_MS = 150;
@@ -356,6 +357,17 @@ function showBanner(text) {
   bannerEl.style.opacity = '1';
   clearTimeout(showBanner._t);
   showBanner._t = setTimeout(() => { bannerEl.style.opacity = '0'; }, 2200);
+}
+
+// ── 지역 진입 배너 — 메이플식으로 새 구역에 들어갈 때마다 큼직하게 지역명을 띄움 ──
+let lastZoneBannerName = null;
+function announceZone(name) {
+  if (!name || name === lastZoneBannerName) return;
+  lastZoneBannerName = name;
+  zoneBannerEl.textContent = name;
+  zoneBannerEl.classList.add('show');
+  clearTimeout(announceZone._t);
+  announceZone._t = setTimeout(() => zoneBannerEl.classList.remove('show'), 2600);
 }
 
 function escapeHtml(s) {
@@ -603,6 +615,10 @@ if (isTouchDevice) {
     e.preventDefault();
     openChat();
   }, { passive: false });
+  document.getElementById('touchFullscreenBtn').addEventListener('touchstart', e => {
+    e.preventDefault();
+    toggleFullscreen();
+  }, { passive: false });
 }
 
 document.getElementById('raidSoloBtn').addEventListener('click', () => {
@@ -667,6 +683,22 @@ musicToggleBtn.addEventListener('click', () => {
   musicToggleBtn.textContent = musicMuted ? '음악: 꺼짐' : '음악: 켜짐';
 });
 
+// ── 전체화면 — 모바일에서 브라우저 주소창 등을 가려서 화면을 더 넓게 씀 ──
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+    if (req) req.call(document.documentElement);
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  }
+}
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+fullscreenBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  fullscreenBtn.textContent = document.fullscreenElement ? '전체화면 해제' : '전체화면';
+});
+
 function updateClassCardLabels() {
   document.querySelectorAll('.class-card').forEach(card => {
     const key = card.dataset.class;
@@ -679,8 +711,7 @@ function updateClassCardLabels() {
 }
 
 document.getElementById('changeClassBtn').addEventListener('click', () => {
-  updateClassCardLabels();
-  classSelectOverlay.classList.remove('hidden');
+  showBanner('직업 변경은 캐시 상품입니다 — 개발자에게 문의하세요');
 });
 
 document.querySelectorAll('.class-card').forEach(card => {
@@ -1099,6 +1130,7 @@ ws.addEventListener('message', ev => {
     obstacles = msg.obstacles || [];
     decorations = msg.decorations || [];
     zoneReadout.textContent = currentZoneName;
+    announceZone(currentZoneName);
     leaveRaidBtn.classList.toggle('hidden', !isRaid);
     raidPromptEl.classList.add('hidden');
     raidBrowserEl.classList.add('hidden');
@@ -1132,6 +1164,7 @@ ws.addEventListener('message', ev => {
         if (p.zoneName && p.zoneName !== currentZoneName && !isRaid) {
           currentZoneName = p.zoneName;
           zoneReadout.textContent = currentZoneName;
+          announceZone(currentZoneName);
         }
         if (p.zoneKey) updateMusicForZone(isRaid ? 'raid' : p.zoneKey);
       } else {
@@ -1376,7 +1409,7 @@ ws.addEventListener('message', ev => {
   } else if (msg.type === 'projectile_spawn') {
     projectiles.set(msg.id, {
       x: msg.x, y: msg.y, vx: msg.vx, vy: msg.vy, ownerId: msg.ownerId, classKey: msg.classKey,
-      maxLife: msg.maxLife, bornAt: performance.now(),
+      maxLife: msg.maxLife, bornAt: performance.now(), tag: msg.tag || null, trail: [],
     });
   } else if (msg.type === 'projectile_hit') {
     projectiles.delete(msg.id);
@@ -2201,6 +2234,11 @@ function drawSparks(now) {
 }
 
 // ── 원거리 공격 투사체(화살/마법탄) — 서버가 준 시작 속도로 클라이언트가 직접 시뮬레이션(도형으로 표현) ──
+const PROJECTILE_TINTS = {
+  multi: { glow: 'rgba(126, 224, 120, 0.4)', shaft: '#8fd67e', head: '#d8f5c8' },
+  pierce: { glow: 'rgba(160, 220, 255, 0.5)', shaft: '#bfe8ff', head: '#ffffff' },
+  default: { glow: 'rgba(255, 210, 120, 0.35)', shaft: '#caa15a', head: '#e8dcc0' },
+};
 function drawProjectiles(now) {
   for (const [id, proj] of projectiles) {
     const age = now - proj.bornAt;
@@ -2208,6 +2246,20 @@ function drawProjectiles(now) {
     const t = age / 1000;
     const x = proj.x + proj.vx * t, y = proj.y + proj.vy * t;
     const angle = Math.atan2(proj.vy, proj.vx);
+
+    // 잔상 트레일 — 화살/구슬 뒤로 옅어지는 자취를 남겨 속도감을 줌
+    proj.trail.push({ x, y, born: now });
+    while (proj.trail.length && now - proj.trail[0].born > 140) proj.trail.shift();
+    for (let i = 0; i < proj.trail.length; i++) {
+      const pt = proj.trail[i];
+      const trailAge = (now - pt.born) / 140;
+      const tint = proj.classKey === 'healer' ? 'rgba(126, 224, 189,' : PROJECTILE_TINTS[proj.tag] ? PROJECTILE_TINTS[proj.tag].glow.replace(/[\d.]+\)$/, '') : 'rgba(255, 210, 120,';
+      ctx.fillStyle = `${tint}${(1 - trailAge) * 0.25})`;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 5 * (1 - trailAge * 0.6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
@@ -2221,21 +2273,44 @@ function drawProjectiles(now) {
       ctx.arc(0, 0, 5, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.strokeStyle = '#caa15a';
-      ctx.lineWidth = 2.5;
+      const tint = PROJECTILE_TINTS[proj.tag] || PROJECTILE_TINTS.default;
+      if (proj.tag) {
+        ctx.fillStyle = tint.glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = tint.shaft;
+      ctx.lineWidth = proj.tag === 'pierce' ? 3.5 : 2.5;
       ctx.beginPath();
       ctx.moveTo(-10, 0);
       ctx.lineTo(8, 0);
       ctx.stroke();
-      ctx.fillStyle = '#e8dcc0';
+      ctx.fillStyle = tint.head;
       ctx.beginPath();
-      ctx.moveTo(12, 0);
+      ctx.moveTo(13, 0);
       ctx.lineTo(4, -4);
       ctx.lineTo(4, 4);
       ctx.closePath();
       ctx.fill();
     }
     ctx.restore();
+  }
+}
+
+// 치유류 스킬에 곁들이는 반짝이 파티클 — 메이플식 힐 이펙트 느낌
+function drawRisingSparkles(cx, cy, spread, t, rgb) {
+  const count = 6;
+  for (let s = 0; s < count; s++) {
+    const seed = s * 47.13;
+    const ang = (Math.sin(seed) * 0.5 + 0.5) * Math.PI * 2;
+    const dist = (Math.cos(seed * 1.7) * 0.5 + 0.5) * spread * 0.8;
+    const px = cx + Math.cos(ang) * dist;
+    const py = cy + Math.sin(ang) * dist - t * 26;
+    ctx.fillStyle = `rgba(${rgb}, ${(1 - t) * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -2251,6 +2326,7 @@ function drawSkillFx(now) {
       ctx.beginPath();
       ctx.arc(fx.x, fx.y, (fx.radius || 150) * t, 0, Math.PI * 2);
       ctx.stroke();
+      drawRisingSparkles(fx.x, fx.y, fx.radius || 150, t, '167, 240, 200');
     } else if (fx.skill === 'selfHeal') {
       if (age > 450) { skillFx.splice(i, 1); continue; }
       const t = age / 450;
@@ -2259,23 +2335,74 @@ function drawSkillFx(now) {
       ctx.beginPath();
       ctx.arc(fx.x, fx.y, 20 + t * 12, 0, Math.PI * 2);
       ctx.stroke();
+      drawRisingSparkles(fx.x, fx.y, 26, t, '167, 240, 200');
     } else if (fx.skill === 'whirlwind') {
-      if (age > 350) { skillFx.splice(i, 1); continue; }
-      const t = age / 350;
+      if (age > 380) { skillFx.splice(i, 1); continue; }
+      const t = age / 380;
+      const r = (fx.radius || 75) * (0.4 + t * 0.6);
       ctx.strokeStyle = `rgba(255, 180, 90, ${1 - t})`;
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(fx.x, fx.y, (fx.radius || 75) * (0.4 + t * 0.6), 0, Math.PI * 2);
+      ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2);
       ctx.stroke();
+      // 회전하는 칼날 궤적 — 빙글빙글 도는 느낌을 강조
+      const blades = 6;
+      for (let s = 0; s < blades; s++) {
+        const ang = (s / blades) * Math.PI * 2 + t * 9;
+        ctx.strokeStyle = `rgba(255, 230, 170, ${0.8 * (1 - t)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, r, ang, ang + 0.5);
+        ctx.stroke();
+      }
     } else if (fx.skill === 'guard' || fx.skill === 'barrier') {
       if (age > 3000) { skillFx.splice(i, 1); continue; }
       const owner = players.get(fx.id);
       const cx = owner && owner.renderX != null ? owner.renderX : fx.x;
       const cy = owner && owner.renderY != null ? owner.renderY : fx.y;
-      ctx.strokeStyle = 'rgba(140, 190, 255, 0.55)';
-      ctx.lineWidth = 2;
+      const pulse = 0.5 + 0.5 * Math.sin(now / 160);
+      const fade = age > 2600 ? 1 - (age - 2600) / 400 : 1;
+      const color = fx.skill === 'barrier' ? '140, 190, 255' : '255, 190, 110';
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.fillStyle = `rgba(${color}, ${0.12 * fade})`;
       ctx.beginPath();
-      ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+      ctx.arc(0, 0, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${color}, ${(0.45 + pulse * 0.35) * fade})`;
+      ctx.lineWidth = 2;
+      ctx.rotate(now / 900);
+      ctx.beginPath();
+      for (let s = 0; s < 6; s++) {
+        const ang = (s / 6) * Math.PI * 2;
+        const px = Math.cos(ang) * 24, py = Math.sin(ang) * 24;
+        if (s === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    } else if (fx.skill === 'multiShot') {
+      if (age > 260) { skillFx.splice(i, 1); continue; }
+      const t = age / 260;
+      const facing = fx.facing || 0;
+      for (const off of [-0.3, 0, 0.3]) {
+        const ang = facing + off;
+        ctx.strokeStyle = `rgba(150, 230, 140, ${0.8 * (1 - t)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(fx.x + Math.cos(ang) * 14, fx.y + Math.sin(ang) * 14);
+        ctx.lineTo(fx.x + Math.cos(ang) * (14 + 30 * t), fx.y + Math.sin(ang) * (14 + 30 * t));
+        ctx.stroke();
+      }
+    } else if (fx.skill === 'piercingShot') {
+      if (age > 260) { skillFx.splice(i, 1); continue; }
+      const t = age / 260;
+      const facing = fx.facing || 0;
+      ctx.strokeStyle = `rgba(190, 232, 255, ${0.9 * (1 - t)})`;
+      ctx.lineWidth = 5 * (1 - t * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(fx.x, fx.y);
+      ctx.lineTo(fx.x + Math.cos(facing) * (20 + 60 * t), fx.y + Math.sin(facing) * (20 + 60 * t));
       ctx.stroke();
     } else if (fx.skill === 'slowField') {
       if (age > 500) { skillFx.splice(i, 1); continue; }

@@ -14,7 +14,7 @@ const OVERWORLD = { w: 4800 * WORLD_SCALE, h: 4800 * WORLD_SCALE, wallThickness:
 const RAID_WORLD = { w: 1400, h: 1000, wallThickness: 24 };
 const PLAYER_R = 14;
 const MONSTER_R = 12;
-const SPEED = 340; // 맵이 커진 만큼 기본 이동속도도 올림(220 → 340)
+const SPEED = 290; // 340은 너무 빨라서 살짝 낮춤(340 → 290)
 const MOVE_ACCEL = 1000;
 const MOVE_DECEL = 1500;
 
@@ -293,13 +293,13 @@ function regionAt(x, y) {
 }
 
 const ZONE_DEFS = {
-  field1: { name: '들꽃 초원', monsterTypes: ['slime', 'mushroom'], monsterCount: 8, bossType: 'iceSlimeKing', eliteType: 'slimeChief', box: FIELD1_BOX },
-  field2: { name: '황혼 언덕', monsterTypes: ['wolf', 'wolf', 'slime'], monsterCount: 8, bossType: 'flameAlphaWolf', eliteType: 'wolfAlpha', box: FIELD2_BOX },
-  field3: { name: '축축한 습지', monsterTypes: ['frog', 'slime'], monsterCount: 8, bossType: 'swampFrogKing', eliteType: 'bogQueen', box: FIELD3_BOX },
-  field4: { name: '메마른 협곡', monsterTypes: ['scorpion', 'mushroom'], monsterCount: 8, bossType: 'canyonScorpionKing', eliteType: 'sandstalker', box: FIELD4_BOX },
-  field5: { name: '얼어붙은 봉우리', monsterTypes: ['bat', 'slime'], monsterCount: 8, bossType: 'frostBatLord', eliteType: 'frostReaver', box: FIELD5_BOX },
-  field6: { name: '불타는 사막', monsterTypes: ['scorpion', 'golem'], monsterCount: 8, bossType: 'magmaGolem', eliteType: 'duneWarden', box: FIELD6_BOX },
-  field7: { name: '잊혀진 폐허', monsterTypes: ['bat', 'golem'], monsterCount: 8, bossType: 'ruinGuardian', eliteType: 'ruinSentinel', box: FIELD7_BOX },
+  field1: { name: '들꽃 초원', monsterTypes: ['slime', 'mushroom'], monsterCount: 14, bossType: 'iceSlimeKing', eliteType: 'slimeChief', box: FIELD1_BOX },
+  field2: { name: '황혼 언덕', monsterTypes: ['wolf', 'wolf', 'slime'], monsterCount: 14, bossType: 'flameAlphaWolf', eliteType: 'wolfAlpha', box: FIELD2_BOX },
+  field3: { name: '축축한 습지', monsterTypes: ['frog', 'slime'], monsterCount: 14, bossType: 'swampFrogKing', eliteType: 'bogQueen', box: FIELD3_BOX },
+  field4: { name: '메마른 협곡', monsterTypes: ['scorpion', 'mushroom'], monsterCount: 14, bossType: 'canyonScorpionKing', eliteType: 'sandstalker', box: FIELD4_BOX },
+  field5: { name: '얼어붙은 봉우리', monsterTypes: ['bat', 'slime'], monsterCount: 14, bossType: 'frostBatLord', eliteType: 'frostReaver', box: FIELD5_BOX },
+  field6: { name: '불타는 사막', monsterTypes: ['scorpion', 'golem'], monsterCount: 14, bossType: 'magmaGolem', eliteType: 'duneWarden', box: FIELD6_BOX },
+  field7: { name: '잊혀진 폐허', monsterTypes: ['bat', 'golem'], monsterCount: 14, bossType: 'ruinGuardian', eliteType: 'ruinSentinel', box: FIELD7_BOX },
 };
 
 const TOWN_ENTRY = { x: S(2400), y: S(2580) }; // 대도시 — 기본 스폰 지점
@@ -438,30 +438,31 @@ function ringObstacles(box, kind, count, inset, radius) {
 }
 
 const OBSTACLES = [
-  ...scatterObstacles(FIELD1_BOX, 'tree', 11),
-  ...scatterObstacles(FIELD2_BOX, 'tree', 8),
-  ...scatterObstacles(FIELD3_BOX, 'tree', 10),
-  ...scatterObstacles(FIELD4_BOX, 'rock', 10),
-  ...scatterObstacles(FIELD5_BOX, 'tree', 9),
-  ...scatterObstacles(FIELD6_BOX, 'rock', 10),
-  ...scatterObstacles(FIELD7_BOX, 'rock', 10),
+  // 지역이 2배로 커진(WORLD_SCALE) 뒤로 필드가 휑해 보여서 밀도를 다시 채움(면적 4배 → 대략 2.5배로 보강)
+  ...scatterObstacles(FIELD1_BOX, 'tree', 28),
+  ...scatterObstacles(FIELD2_BOX, 'tree', 20),
+  ...scatterObstacles(FIELD3_BOX, 'tree', 26),
+  ...scatterObstacles(FIELD4_BOX, 'rock', 26),
+  ...scatterObstacles(FIELD5_BOX, 'tree', 23),
+  ...scatterObstacles(FIELD6_BOX, 'rock', 26),
+  ...scatterObstacles(FIELD7_BOX, 'rock', 26),
   // 구조물(부서진 기둥/울타리 등) — 지역마다 조금씩 섞어 넣음
-  ...scatterObstacles(FIELD1_BOX, 'structure', 2),
-  ...scatterObstacles(FIELD2_BOX, 'structure', 2),
-  ...scatterObstacles(FIELD3_BOX, 'structure', 2),
-  ...scatterObstacles(FIELD4_BOX, 'structure', 3),
-  ...scatterObstacles(FIELD5_BOX, 'structure', 2),
-  ...scatterObstacles(FIELD6_BOX, 'structure', 3),
-  ...scatterObstacles(FIELD7_BOX, 'structure', 4),
+  ...scatterObstacles(FIELD1_BOX, 'structure', 5),
+  ...scatterObstacles(FIELD2_BOX, 'structure', 5),
+  ...scatterObstacles(FIELD3_BOX, 'structure', 5),
+  ...scatterObstacles(FIELD4_BOX, 'structure', 7),
+  ...scatterObstacles(FIELD5_BOX, 'structure', 5),
+  ...scatterObstacles(FIELD6_BOX, 'structure', 7),
+  ...scatterObstacles(FIELD7_BOX, 'structure', 9),
   // 지역별 테마 구조물 — 다채로운 볼거리 추가
-  ...scatterObstacles(FIELD1_BOX, 'fence', 3),        // 들꽃 초원 — 목장 울타리
-  ...scatterObstacles(FIELD2_BOX, 'fence', 2),
-  ...scatterObstacles(FIELD2_BOX, 'cairn', 2),        // 황혼 언덕 — 돌무덤
-  ...scatterObstacles(FIELD3_BOX, 'totem', 3),        // 축축한 습지 — 부족 토템
-  ...scatterObstacles(FIELD4_BOX, 'campfire', 2),     // 메마른 협곡 — 버려진 야영지
-  ...scatterObstacles(FIELD5_BOX, 'cairn', 3),        // 얼어붙은 봉우리 — 돌무덤
-  ...scatterObstacles(FIELD6_BOX, 'cactus', 4),       // 불타는 사막 — 선인장
-  ...scatterObstacles(FIELD7_BOX, 'ruinWall', 3),     // 잊혀진 폐허 — 무너진 벽
+  ...scatterObstacles(FIELD1_BOX, 'fence', 7),        // 들꽃 초원 — 목장 울타리
+  ...scatterObstacles(FIELD2_BOX, 'fence', 5),
+  ...scatterObstacles(FIELD2_BOX, 'cairn', 5),        // 황혼 언덕 — 돌무덤
+  ...scatterObstacles(FIELD3_BOX, 'totem', 7),        // 축축한 습지 — 부족 토템
+  ...scatterObstacles(FIELD4_BOX, 'campfire', 5),     // 메마른 협곡 — 버려진 야영지
+  ...scatterObstacles(FIELD5_BOX, 'cairn', 7),        // 얼어붙은 봉우리 — 돌무덤
+  ...scatterObstacles(FIELD6_BOX, 'cactus', 9),       // 불타는 사막 — 선인장
+  ...scatterObstacles(FIELD7_BOX, 'ruinWall', 7),     // 잊혀진 폐허 — 무너진 벽
   // 도시 — 민가·시장 좌판을 훨씬 촘촘하게 채워 넣어 진짜 대도시처럼 붐비게, 외곽엔 성벽을 둘러 마을이 아니라 도시처럼
   ...scatterObstacles(CAPITAL_BOX, 'house', 32, 30),
   ...scatterObstacles(CAPITAL_BOX, 'stall', 12, 26),
@@ -513,14 +514,14 @@ const FIELD_HUB_BOX = {
 };
 
 const DECORATIONS = [
-  ...scatterDecorations(FIELD1_BOX, 'flower', 20),
-  ...scatterDecorations(FIELD2_BOX, 'flower', 10),
-  ...scatterDecorations(FIELD2_BOX, 'dirt', 6),
-  ...scatterDecorations(FIELD3_BOX, 'flower', 12),
-  ...scatterDecorations(FIELD4_BOX, 'dirt', 14),
-  ...scatterDecorations(FIELD5_BOX, 'flower', 10),
-  ...scatterDecorations(FIELD6_BOX, 'dirt', 14),
-  ...scatterDecorations(FIELD7_BOX, 'dirt', 12),
+  ...scatterDecorations(FIELD1_BOX, 'flower', 48),
+  ...scatterDecorations(FIELD2_BOX, 'flower', 24),
+  ...scatterDecorations(FIELD2_BOX, 'dirt', 14),
+  ...scatterDecorations(FIELD3_BOX, 'flower', 28),
+  ...scatterDecorations(FIELD4_BOX, 'dirt', 34),
+  ...scatterDecorations(FIELD5_BOX, 'flower', 24),
+  ...scatterDecorations(FIELD6_BOX, 'dirt', 34),
+  ...scatterDecorations(FIELD7_BOX, 'dirt', 28),
   // 지역 중심에서 레이드 입구까지 흙길
   ...FIELD_KEYS.flatMap(key => {
     const raidLm = LANDMARKS.find(l => l.kind === 'raid_entrance' && l.zoneKey === key);
@@ -1207,7 +1208,7 @@ function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
   room.projectiles.set(proj.id, proj);
   broadcastRoom(room, {
     type: 'projectile_spawn', id: proj.id, x: proj.x, y: proj.y, vx: proj.vx, vy: proj.vy,
-    ownerId: player.id, classKey: player.classKey, maxLife: proj.maxLife,
+    ownerId: player.id, classKey: player.classKey, maxLife: proj.maxLife, tag: opts.tag || null,
   });
   sendTo(player, { type: 'attack_result', hits: [], totalExp: player.exp, level: player.level, weaponDurability: weapon.durability, weaponMaxDurability: weapon.maxDurability });
 }
@@ -1280,9 +1281,11 @@ function runSkill(player, room, skillKey, now) {
     player.guardUntil = now + 3000;
     broadcastRoom(room, { type: 'skill_fx', id: player.id, skill: skillKey, x: player.x, y: player.y });
   } else if (skillKey === 'multiShot') {
-    for (const off of [-0.3, 0, 0.3]) spawnProjectile(room, player, off, { dmgMult: 0.8 });
+    for (const off of [-0.3, 0, 0.3]) spawnProjectile(room, player, off, { dmgMult: 0.8, tag: 'multi' });
+    broadcastRoom(room, { type: 'skill_fx', id: player.id, skill: 'multiShot', x: player.x, y: player.y, facing: player.facing });
   } else if (skillKey === 'piercingShot') {
-    spawnProjectile(room, player, 0, { pierce: true, dmgMult: 1.6 });
+    spawnProjectile(room, player, 0, { pierce: true, dmgMult: 1.6, tag: 'pierce' });
+    broadcastRoom(room, { type: 'skill_fx', id: player.id, skill: 'piercingShot', x: player.x, y: player.y, facing: player.facing });
   } else if (skillKey === 'slowField') {
     for (const m of room.monsters.values()) {
       if (Math.hypot(m.x - player.x, m.y - player.y) <= 160) m.slowUntil = now + 3000;
