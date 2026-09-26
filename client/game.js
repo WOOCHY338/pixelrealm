@@ -1155,6 +1155,8 @@ ws.addEventListener('message', ev => {
       entry.name = p.name;
       entry.level = p.level;
       entry.guildTag = p.guildTag;
+      entry.weaponKey = p.weaponKey;
+      entry.weaponElement = p.weaponElement;
       if (p.id === selfId) {
         entry.serverTarget.x = p.x;
         entry.serverTarget.y = p.y;
@@ -2021,8 +2023,75 @@ function drawSwing(x, y, facing) {
   ctx.restore();
 }
 
+// ── 장착 무기 디자인 — 도형 기반(도트 아님)으로 손에 든 검을 표현, 등급별로 형태·색이 다름 ──
+const WEAPON_VISUALS = {
+  starter:         { len: 15, width: 3.2, blade: '#9a958a', edge: '#c4beb0', hilt: '#5a4a34' },
+  silverSword:     { len: 17, width: 3.4, blade: '#c7ced8', edge: '#eef2f7', hilt: '#4a4a52' },
+  goldSword:       { len: 18, width: 3.6, blade: '#e0c258', edge: '#fff0b0', hilt: '#5a4420' },
+  flameSword:      { len: 17, width: 3.6, blade: '#e0542f', edge: '#ffcf94', hilt: '#3a2418', glow: 'rgba(255,110,40,0.5)' },
+  frostSword:      { len: 17, width: 3.6, blade: '#7fd0ec', edge: '#e4f8ff', hilt: '#26333a', glow: 'rgba(120,210,255,0.5)' },
+  steelSword:      { len: 20, width: 3.8, blade: '#8a97a8', edge: '#e4eaf2', hilt: '#2e2e34' },
+  diamondSword:    { len: 21, width: 4.0, blade: '#bfe9f5', edge: '#ffffff', hilt: '#33424a', glow: 'rgba(180,235,255,0.45)' },
+  radiantSword:    { len: 23, width: 4.2, blade: '#fff2b8', edge: '#ffffff', hilt: '#6a5a2a', glow: 'rgba(255,235,160,0.6)' },
+  windBreathSword: { len: 25, width: 4.2, blade: '#9ef2c8', edge: '#eafff2', hilt: '#2c4a3a', glow: 'rgba(140,255,200,0.5)', wispy: true },
+  masterySword:    { len: 28, width: 4.6, blade: '#3a1a5e', edge: '#ff6ad5', hilt: '#1a0a2a', glow: 'rgba(255,90,220,0.55)', sparkle: true },
+};
+function drawWeaponInHand(weaponKey) {
+  const now = performance.now();
+  const wv = WEAPON_VISUALS[weaponKey] || WEAPON_VISUALS.starter;
+  const baseX = 9;
+  const tipX = baseX + wv.len;
+
+  if (wv.glow) {
+    ctx.fillStyle = wv.glow;
+    ctx.beginPath();
+    ctx.arc((baseX + tipX) / 2, 0, wv.len * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = wv.hilt;
+  ctx.fillRect(baseX - 4, -1.6, 5, 3.2);
+  ctx.fillRect(baseX, -4, 1.6, 8);
+
+  ctx.fillStyle = wv.blade;
+  ctx.beginPath();
+  ctx.moveTo(baseX + 1, -wv.width / 2);
+  ctx.lineTo(tipX - 3, -wv.width / 2);
+  ctx.lineTo(tipX, 0);
+  ctx.lineTo(tipX - 3, wv.width / 2);
+  ctx.lineTo(baseX + 1, wv.width / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = wv.edge;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(baseX + 1, 0);
+  ctx.lineTo(tipX, 0);
+  ctx.stroke();
+
+  if (wv.sparkle) {
+    const s = 0.5 + 0.5 * Math.sin(now / 130);
+    ctx.fillStyle = `rgba(255,255,255,${0.4 + s * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(baseX + wv.len * 0.6, -wv.width * 0.7, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (wv.wispy) {
+    ctx.strokeStyle = 'rgba(200,255,225,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 2; i++) {
+      const off = Math.sin(now / 150 + i * 2) * 3;
+      ctx.beginPath();
+      ctx.moveTo(baseX + wv.len * 0.4, off - 2 - i * 3);
+      ctx.lineTo(baseX + wv.len * 0.75, off + 2 - i * 3);
+      ctx.stroke();
+    }
+  }
+}
+
 // ── 캐릭터: 도트 그리드 대신 도형(원·삼각형) 조합 — 최종 컨셉으로 확정 ──
-function drawPlayer(x, y, facing, name, isSelf, swinging, flashing) {
+function drawPlayer(x, y, facing, name, isSelf, swinging, flashing, weaponKey) {
   ctx.save();
   ctx.translate(x, y);
 
@@ -2044,13 +2113,7 @@ function drawPlayer(x, y, facing, name, isSelf, swinging, flashing) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.fillStyle = isSelf ? '#ffe9b8' : '#e8fff5';
-  ctx.beginPath();
-  ctx.moveTo(24, 0);
-  ctx.lineTo(10, -6);
-  ctx.lineTo(10, 6);
-  ctx.closePath();
-  ctx.fill();
+  drawWeaponInHand(weaponKey || 'starter');
 
   ctx.restore();
 
@@ -2727,7 +2790,7 @@ function loop(now) {
     const swinging = p.swingUntil && now < p.swingUntil;
     const flashing = p.flashUntil && now < p.flashUntil;
     const tag = `Lv.${p.level || 1} ${p.guildTag ? `[${p.guildTag}] ` : ''}${p.name}`;
-    drawPlayer(p.renderX, p.renderY, p.facing, tag, id === selfId, swinging, flashing);
+    drawPlayer(p.renderX, p.renderY, p.facing, tag, id === selfId, swinging, flashing, p.weaponKey, p.weaponElement);
     if (p.chatBubble && now < p.chatBubble.until) drawChatBubble(p.renderX, p.renderY, p.chatBubble.text);
   }
   drawSkillFx(now);

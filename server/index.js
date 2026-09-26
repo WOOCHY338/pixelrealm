@@ -1357,6 +1357,7 @@ function tick(dt) {
       players: [...room.players.values()].map(p => ({
         id: p.id, x: round1(p.x), y: round1(p.y),
         facing: p.facing, name: p.name, hp: p.hp, maxHp: p.maxHp, level: p.level, guildTag: p.guildTag || null,
+        weaponKey: p.weapon.key, weaponElement: p.weapon.element,
         zoneName: room.kind === 'world' ? regionAt(p.x, p.y).name : null,
         zoneKey: room.kind === 'world' ? regionAt(p.x, p.y).key : room.zoneKey,
       })),
