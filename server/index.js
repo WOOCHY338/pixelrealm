@@ -187,6 +187,9 @@ const MONSTER_TYPES = {
   scorpion: { name: '전갈', hp: 25, atk: 5, exp: 16, chaseSpeed: 80, wanderSpeed: 40, aggroRange: 160, deaggroRange: 240, r: MONSTER_R },
   bat: { name: '박쥐', hp: 12, atk: 3, exp: 11, chaseSpeed: 100, wanderSpeed: 60, aggroRange: 150, deaggroRange: 230, r: MONSTER_R },
   golem: { name: '골렘', hp: 40, atk: 7, exp: 30, chaseSpeed: 45, wanderSpeed: 25, aggroRange: 130, deaggroRange: 200, r: MONSTER_R + 2 },
+  goblin: { name: '고블린', hp: 22, atk: 5, exp: 15, chaseSpeed: 85, wanderSpeed: 45, aggroRange: 150, deaggroRange: 230, r: MONSTER_R },
+  treant: { name: '덩굴괴물', hp: 28, atk: 5, exp: 16, chaseSpeed: 55, wanderSpeed: 30, aggroRange: 140, deaggroRange: 220, r: MONSTER_R + 1 },
+  naga: { name: '물의 정령', hp: 20, atk: 5, exp: 15, chaseSpeed: 75, wanderSpeed: 40, aggroRange: 150, deaggroRange: 230, r: MONSTER_R },
 };
 
 // ── 필드마다 하나씩 상주하는 정예 몬스터 — 잡몹보다 훨씬 세지만 레이드처럼 인스턴싱하지 않고 필드에 그대로 돌아다님 ──
@@ -198,6 +201,9 @@ const ELITE_TYPES = {
   frostReaver: { name: '서리 박쥐 떼대장', baseKind: 'bat', hp: 110, atk: 10, exp: 62, chaseSpeed: 120, wanderSpeed: 65, aggroRange: 180, deaggroRange: 270, r: MONSTER_R + 4 },
   duneWarden: { name: '사막 골렘 수문장', baseKind: 'golem', hp: 160, atk: 13, exp: 80, chaseSpeed: 50, wanderSpeed: 28, aggroRange: 160, deaggroRange: 240, r: MONSTER_R + 6 },
   ruinSentinel: { name: '폐허의 파수병', baseKind: 'golem', hp: 160, atk: 13, exp: 80, chaseSpeed: 50, wanderSpeed: 28, aggroRange: 160, deaggroRange: 240, r: MONSTER_R + 6 },
+  goblinChief: { name: '고블린 우두머리', baseKind: 'goblin', hp: 100, atk: 10, exp: 58, chaseSpeed: 90, wanderSpeed: 48, aggroRange: 170, deaggroRange: 260, r: MONSTER_R + 4 },
+  ancientTreant: { name: '늙은 덩굴괴물', baseKind: 'treant', hp: 135, atk: 10, exp: 68, chaseSpeed: 60, wanderSpeed: 32, aggroRange: 160, deaggroRange: 250, r: MONSTER_R + 5 },
+  nagaPriestess: { name: '나가 여사제', baseKind: 'naga', hp: 112, atk: 10, exp: 62, chaseSpeed: 80, wanderSpeed: 42, aggroRange: 170, deaggroRange: 260, r: MONSTER_R + 4 },
 };
 const ELITE_RESPAWN_DELAY_MS = 60000;
 
@@ -238,6 +244,21 @@ const BOSS_TYPES = {
     weakness: 'fire', pattern: 'nova',
     novaIntervalMs: 5000, novaTelegraphMs: 900, novaRadius: 105, novaDamage: 14, novaSlowMs: 2500,
   },
+  goblinWarlord: {
+    name: '고블린 대장', hp: 230, atk: 9, exp: 108, chaseSpeed: 95, aggroRange: 999, deaggroRange: 999999, r: 21,
+    weakness: 'ice', pattern: 'dash',
+    dashIntervalMs: 4300, dashTelegraphMs: 580, dashDurationMs: 340, dashSpeed: 510, dashDamage: 15, recoverMs: 800,
+  },
+  ancientTreantLord: {
+    name: '고대 정령수', hp: 270, atk: 8, exp: 118, chaseSpeed: 48, aggroRange: 999, deaggroRange: 999999, r: 24,
+    weakness: 'fire', pattern: 'nova',
+    novaIntervalMs: 5100, novaTelegraphMs: 950, novaRadius: 108, novaDamage: 15, novaSlowMs: 2500,
+  },
+  abyssalNaga: {
+    name: '심연의 나가', hp: 250, atk: 8, exp: 112, chaseSpeed: 105, aggroRange: 999, deaggroRange: 999999, r: 22,
+    weakness: 'ice', pattern: 'dash',
+    dashIntervalMs: 4100, dashTelegraphMs: 520, dashDurationMs: 330, dashSpeed: 540, dashDamage: 15, recoverMs: 780,
+  },
 };
 
 // 몬스터를 잡으면 얻는 "신체 일부" — 상점에서 팔아서 골드로 바꿈
@@ -263,11 +284,20 @@ const MATERIAL_INFO = {
   frostReaver: { name: '떼대장의 발톱', price: 31 },
   duneWarden: { name: '수문장의 코어', price: 40 },
   ruinSentinel: { name: '파수병의 문장', price: 40 },
+  goblin: { name: '고블린 이빨', price: 6 },
+  treant: { name: '덩굴 조각', price: 7 },
+  naga: { name: '정령의 비늘', price: 6 },
+  goblinWarlord: { name: '대장의 완장', price: 66 },
+  ancientTreantLord: { name: '정령수의 뿌리', price: 72 },
+  abyssalNaga: { name: '심연의 눈물', price: 68 },
+  goblinChief: { name: '우두머리의 곤봉', price: 30 },
+  ancientTreant: { name: '늙은 나이테', price: 34 },
+  nagaPriestess: { name: '여사제의 비늘', price: 31 },
 };
 
 // ── 오픈월드 지역 정의 — 사용자가 그려준 지도(인접 관계) 그대로 재배치(v3.1) ──
 // 대도시(좌하단) — 들꽃초원 — 황혼언덕 — 메마른협곡(좌상단) 세로줄
-// 변방도시(상단) — 마을 — 그린숲 — 물의신전 세로줄(가운데, 마을/그린숲/물의신전은 장식/통로 전용 지역)
+// 변방도시(상단) — 마을 — 그린숲 — 물의신전 세로줄(가운데, 마을/그린숲은 변방도시 소속·물의신전은 대도시 소속 필드)
 // 불타는사막 — 축축한습지 세로줄(가운데-우측), 얼어붙은봉우리 — 잊혀진폐허 세로줄(우측)
 function S(n) { return n * WORLD_SCALE; }
 const CAPITAL_BOX = { xMin: S(100), xMax: S(1300), yMin: S(3600), yMax: S(4700) };        // 좌하단
@@ -276,9 +306,9 @@ const FIELD2_BOX = { xMin: S(100), xMax: S(1300), yMin: S(1300), yMax: S(2400) }
 const FIELD4_BOX = { xMin: S(100), xMax: S(1300), yMin: S(100), yMax: S(1300) };         // 메마른 협곡(좌상단)
 
 const SECOND_CITY_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(100), yMax: S(1300) };    // 변방 도시(상단)
-const VILLAGE_BOX = { xMin: S(1300), xMax: S(2000), yMin: S(1300), yMax: S(1900) };       // 마을(장식 전용, 소형)
-const GREEN_FOREST_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(1900), yMax: S(3000) };  // 그린 숲(장식 전용)
-const WATER_TEMPLE_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(3000), yMax: S(4700) };  // 물의 신전(장식 전용)
+const VILLAGE_BOX = { xMin: S(1300), xMax: S(2000), yMin: S(1300), yMax: S(1900) };       // 마을(소형 필드)
+const GREEN_FOREST_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(1900), yMax: S(3000) };  // 그린 숲
+const WATER_TEMPLE_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(3000), yMax: S(4700) };  // 물의 신전
 
 const FIELD6_BOX = { xMin: S(2500), xMax: S(3700), yMin: S(100), yMax: S(2600) };        // 불타는 사막
 const FIELD3_BOX = { xMin: S(2500), xMax: S(3700), yMin: S(2600), yMax: S(4700) };       // 축축한 습지
@@ -312,6 +342,9 @@ const ZONE_DEFS = {
   field5: { name: '얼어붙은 봉우리', monsterTypes: ['bat', 'slime'], monsterCount: 14, bossType: 'frostBatLord', eliteType: 'frostReaver', box: FIELD5_BOX },
   field6: { name: '불타는 사막', monsterTypes: ['scorpion', 'golem'], monsterCount: 14, bossType: 'magmaGolem', eliteType: 'duneWarden', box: FIELD6_BOX },
   field7: { name: '잊혀진 폐허', monsterTypes: ['bat', 'golem'], monsterCount: 14, bossType: 'ruinGuardian', eliteType: 'ruinSentinel', box: FIELD7_BOX },
+  village: { name: '마을', monsterTypes: ['goblin', 'slime'], monsterCount: 6, bossType: 'goblinWarlord', eliteType: 'goblinChief', box: VILLAGE_BOX },
+  greenforest: { name: '그린 숲', monsterTypes: ['treant', 'mushroom'], monsterCount: 13, bossType: 'ancientTreantLord', eliteType: 'ancientTreant', box: GREEN_FOREST_BOX },
+  watertemple: { name: '물의 신전', monsterTypes: ['naga', 'frog'], monsterCount: 14, bossType: 'abyssalNaga', eliteType: 'nagaPriestess', box: WATER_TEMPLE_BOX },
 };
 
 const TOWN_ENTRY = { x: S(700), y: S(4330) }; // 대도시 — 기본 스폰 지점
@@ -328,6 +361,9 @@ const LANDMARKS = [
   { key: 'field5_raid', x: S(4200), y: S(900), r: 40, kind: 'raid_entrance', zoneKey: 'field5' },
   { key: 'field6_raid', x: S(3100), y: S(1350), r: 40, kind: 'raid_entrance', zoneKey: 'field6' },
   { key: 'field7_raid', x: S(4200), y: S(3200), r: 40, kind: 'raid_entrance', zoneKey: 'field7' },
+  { key: 'village_raid', x: S(1650), y: S(1600), r: 40, kind: 'raid_entrance', zoneKey: 'village' },
+  { key: 'greenforest_raid', x: S(1900), y: S(2450), r: 40, kind: 'raid_entrance', zoneKey: 'greenforest' },
+  { key: 'watertemple_raid', x: S(1900), y: S(3300), r: 40, kind: 'raid_entrance', zoneKey: 'watertemple' },
 ];
 
 // ── NPC / 퀘스트 — NPC 하나당 고정 퀘스트 하나(체인 없음), 완료 후에도 다시 받을 수는 없음 ──
@@ -384,6 +420,7 @@ const WORLD_PORTALS = [
     { id: 'raid_field1', label: '초원 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field1' } },
     { id: 'raid_field2', label: '언덕 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field2' } },
     { id: 'raid_field3', label: '습지 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field3' } },
+    { id: 'raid_watertemple', label: '물의 신전 레이드 접수처', action: { type: 'raid_list', zoneKey: 'watertemple' } },
   ], 140, 55, 16),
   { id: 'shop_capital', x: S(200), y: S(4100), w: 140, h: 60, label: '상점', action: { type: 'shop' } },
   { id: 'blacksmith_capital', x: S(1060), y: S(4100), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
@@ -396,6 +433,8 @@ const WORLD_PORTALS = [
     { id: 'raid_field5', label: '봉우리 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field5' } },
     { id: 'raid_field6', label: '사막 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field6' } },
     { id: 'raid_field7', label: '폐허 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field7' } },
+    { id: 'raid_village', label: '마을 레이드 접수처', action: { type: 'raid_list', zoneKey: 'village' } },
+    { id: 'raid_greenforest', label: '그린 숲 레이드 접수처', action: { type: 'raid_list', zoneKey: 'greenforest' } },
   ], 140, 55, 16),
   { id: 'shop_frontier', x: S(1380), y: S(650), w: 140, h: 60, label: '상점', action: { type: 'shop' } },
   { id: 'blacksmith_frontier', x: S(2240), y: S(650), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
@@ -483,7 +522,7 @@ const OBSTACLES = [
   ...scatterObstacles(SECOND_CITY_BOX, 'stall', 8, 26),
   ...ringObstacles(CAPITAL_BOX, 'wallSeg', 32, 20, 34),
   ...ringObstacles(SECOND_CITY_BOX, 'wallSeg', 24, 20, 34),
-  // 마을/그린 숲/물의 신전 — 지도 개편으로 새로 생긴 통로용 지역(장식 전용, 몬스터·퀘스트 없음)
+  // 마을/그린 숲/물의 신전 — 지도 개편으로 새로 생긴 필드(몬스터·엘리트·레이드 보스 포함)
   ...scatterObstacles(VILLAGE_BOX, 'house', 5, 28),          // 마을 — 작은 민가 몇 채
   ...scatterObstacles(GREEN_FOREST_BOX, 'tree', 30),         // 그린 숲 — 이름값 하는 빽빽한 숲
   ...scatterObstacles(GREEN_FOREST_BOX, 'structure', 3),
@@ -524,12 +563,16 @@ function pathDecorations(from, to, kind, step) {
   return list;
 }
 
-const FIELD_KEYS = ['field1', 'field2', 'field3', 'field4', 'field5', 'field6', 'field7'];
-const FIELD_BOXES = { field1: FIELD1_BOX, field2: FIELD2_BOX, field3: FIELD3_BOX, field4: FIELD4_BOX, field5: FIELD5_BOX, field6: FIELD6_BOX, field7: FIELD7_BOX };
+const FIELD_KEYS = ['field1', 'field2', 'field3', 'field4', 'field5', 'field6', 'field7', 'village', 'greenforest', 'watertemple'];
+const FIELD_BOXES = {
+  field1: FIELD1_BOX, field2: FIELD2_BOX, field3: FIELD3_BOX, field4: FIELD4_BOX, field5: FIELD5_BOX, field6: FIELD6_BOX, field7: FIELD7_BOX,
+  village: VILLAGE_BOX, greenforest: GREEN_FOREST_BOX, watertemple: WATER_TEMPLE_BOX,
+};
 // 필드마다 소재지 역할을 하는 도시 — 레이드 접수처가 있는 도시와 동일하게 매핑
 const FIELD_HUB_BOX = {
   field1: CAPITAL_BOX, field2: CAPITAL_BOX, field3: CAPITAL_BOX,
   field4: SECOND_CITY_BOX, field5: SECOND_CITY_BOX, field6: SECOND_CITY_BOX, field7: SECOND_CITY_BOX,
+  village: SECOND_CITY_BOX, greenforest: SECOND_CITY_BOX, watertemple: CAPITAL_BOX,
 };
 
 const DECORATIONS = [
@@ -758,6 +801,9 @@ const RAID_ARENA_DECOR = {
   field5: { obstacles: [['cairn', 4]], decorations: [['dirt', 4]] },
   field6: { obstacles: [['cactus', 4], ['rock', 2]], decorations: [['dirt', 8]] },
   field7: { obstacles: [['ruinWall', 4], ['rock', 2]], decorations: [['dirt', 6]] },
+  village: { obstacles: [['house', 3], ['fence', 2]], decorations: [['flower', 8]] },
+  greenforest: { obstacles: [['tree', 6], ['structure', 2]], decorations: [['flower', 10]] },
+  watertemple: { obstacles: [['totem', 4], ['ruinWall', 3]], decorations: [['dirt', 8]] },
 };
 
 function createRaidRoom(zoneKey, mode, hostId, hostName) {

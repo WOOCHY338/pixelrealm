@@ -2164,6 +2164,16 @@ const MONSTER_COLORS = {
   frostReaver: { body: '#332a5e', hi: '#ffd45c', flash: '#e4dcff', flashHi: '#ffffff' },
   duneWarden: { body: '#443f38', hi: '#ffd45c', flash: '#e8e8d8', flashHi: '#ffffff' },
   ruinSentinel: { body: '#443f38', hi: '#ffd45c', flash: '#e8e8d8', flashHi: '#ffffff' },
+  // 마을/그린 숲/물의 신전 — 새 지역 몬스터
+  goblin: { body: '#5a7a3a', hi: '#a8d67c', flash: '#e8fbd8', flashHi: '#ffffff' },
+  treant: { body: '#4a3420', hi: '#7a9c4a', flash: '#e8f0d8', flashHi: '#ffffff' },
+  naga: { body: '#2f6a8f', hi: '#6cc4e8', flash: '#d8f4ff', flashHi: '#ffffff' },
+  goblinWarlord: { body: '#3a5a1c', hi: '#ffd45c', flash: '#e8fbd8', flashHi: '#ffffff' },
+  ancientTreantLord: { body: '#2e2010', hi: '#ffd45c', flash: '#e8f0d8', flashHi: '#ffffff' },
+  abyssalNaga: { body: '#1a3a5e', hi: '#ffd45c', flash: '#d8f4ff', flashHi: '#ffffff' },
+  goblinChief: { body: '#3a5a1c', hi: '#ffd45c', flash: '#e8fbd8', flashHi: '#ffffff' },
+  ancientTreant: { body: '#3a2c18', hi: '#ffd45c', flash: '#e8f0d8', flashHi: '#ffffff' },
+  nagaPriestess: { body: '#1f5a7e', hi: '#ffd45c', flash: '#d8f4ff', flashHi: '#ffffff' },
 };
 
 function drawMonster(x, y, kind, hp, maxHp, flashing, squashX, squashY, isBoss, phase, now, isElite) {
@@ -2271,6 +2281,11 @@ function monsterName(kind) {
     iceSlimeKing: '얼음 슬라임 킹', flameAlphaWolf: '불꽃 들개 대장',
     slimeChief: '점액 대장', wolfAlpha: '외눈 들개 우두머리', bogQueen: '늪지 여왕개구리', sandstalker: '쌍갈래 전갈',
     frostReaver: '서리 박쥐 떼대장', duneWarden: '사막 골렘 수문장', ruinSentinel: '폐허의 파수병',
+    swampFrogKing: '독늪 개구리왕', canyonScorpionKing: '모래폭풍 전갈왕', frostBatLord: '서리 박쥐 군주',
+    magmaGolem: '용암 골렘', ruinGuardian: '폐허의 수호자',
+    goblin: '고블린', treant: '덩굴괴물', naga: '물의 정령',
+    goblinWarlord: '고블린 대장', ancientTreantLord: '고대 정령수', abyssalNaga: '심연의 나가',
+    goblinChief: '고블린 우두머리', ancientTreant: '늙은 덩굴괴물', nagaPriestess: '나가 여사제',
   }[kind] || kind;
 }
 
