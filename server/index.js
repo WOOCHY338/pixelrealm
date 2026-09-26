@@ -1666,6 +1666,8 @@ wss.on('connection', ws => {
       player.inventory.splice(idx, 1);
       player.inventory.push(player.weapon);
       player.weapon = newWeapon;
+      player.user.weapon = newWeapon;
+      saveUsers();
       sendInventory(player);
     } else if (msg.type === 'use_item') {
       const idx = player.inventory.findIndex(i => i.id === msg.itemId && i.kind === 'potion');
@@ -1674,6 +1676,7 @@ wss.on('connection', ws => {
       player.hp = Math.min(player.maxHp, player.hp + item.heal);
       item.qty--;
       if (item.qty <= 0) player.inventory.splice(idx, 1);
+      saveUsers();
       sendTo(player, { type: 'healed', amount: item.heal, hp: player.hp, maxHp: player.maxHp });
       sendInventory(player);
     } else if (msg.type === 'blacksmith_enhance') {
@@ -1740,6 +1743,7 @@ wss.on('connection', ws => {
         const id = 'mk' + (nextMarketId++);
         marketListings.set(id, { id, sellerUsername: player.username, sellerNickname: player.name, ...listedItem, qty: listQty, price, listedAt: Date.now() });
         saveMarket();
+        saveUsers();
         sendInventory(player);
         sendMarketData(player);
       } else if (msg.type === 'market_buy') {
@@ -1748,8 +1752,8 @@ wss.on('connection', ws => {
         if (listing.sellerUsername === player.username) { sendTo(player, { type: 'shop_error', reason: '자신이 등록한 아이템은 구매할 수 없습니다' }); return; }
         if (player.gold < listing.price) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
         player.gold -= listing.price;
-        syncGold(player);
         grantMarketItem(player, listing);
+        syncGold(player);
         marketListings.delete(listing.id);
         saveMarket();
         const seller = users.get(listing.sellerUsername);
@@ -1767,6 +1771,7 @@ wss.on('connection', ws => {
         grantMarketItem(player, listing);
         marketListings.delete(listing.id);
         saveMarket();
+        saveUsers();
         sendInventory(player);
         sendMarketData(player);
       }
@@ -1786,8 +1791,9 @@ wss.on('connection', ws => {
     } else if (msg.type === 'quest_accept' && QUEST_DEFS[msg.questId]) {
       const user = player.user;
       if (!user.quests) user.quests = {};
-      if (user.quests[msg.questId]) return;
-      user.quests[msg.questId] = { progress: 0, turnedIn: false };
+      const existing = user.quests[msg.questId];
+      if (existing && !existing.turnedIn) return; // 이미 진행 중인 퀘스트는 중복 수락 불가
+      user.quests[msg.questId] = { progress: 0, turnedIn: false }; // 완료한 퀘스트는 재수락 시 반복 가능
       saveUsers();
       sendNpcDialogue(player, QUEST_DEFS[msg.questId].npcId);
     } else if (msg.type === 'quest_turn_in' && QUEST_DEFS[msg.questId]) {

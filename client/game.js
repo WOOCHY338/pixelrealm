@@ -660,9 +660,9 @@ function renderNpcPanel(d) {
     npcActionBtn.disabled = false;
     npcActionBtn.onclick = () => ws.send(JSON.stringify({ type: 'quest_turn_in', questId: d.questId }));
   } else {
-    npcActionBtn.textContent = '완료한 퀘스트';
-    npcActionBtn.disabled = true;
-    npcActionBtn.onclick = null;
+    npcActionBtn.textContent = '다시 수주하기';
+    npcActionBtn.disabled = false;
+    npcActionBtn.onclick = () => ws.send(JSON.stringify({ type: 'quest_accept', questId: d.questId }));
   }
 }
 document.getElementById('npcCloseBtn').addEventListener('click', () => npcPanelEl.classList.add('hidden'));
