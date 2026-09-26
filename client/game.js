@@ -1426,18 +1426,21 @@ ws.addEventListener('message', ev => {
   }
 });
 
-// 서버의 지역 박스와 동일한 값(미니맵·바닥 색 계산용) — 4800×4800을 3×3 칸으로 채운 뒤 전체를 2배로 확대(WORLD_SCALE, 서버와 동일)
+// 서버의 지역 박스와 동일한 값(미니맵·바닥 색 계산용) — v3.1: 사용자가 그려준 지도대로 재배치
 const WORLD_SCALE = 2;
 function S(n) { return n * WORLD_SCALE; }
-const CAPITAL_BOX = { xMin: S(1800), xMax: S(3000), yMin: S(1800), yMax: S(3000) };
-const SECOND_CITY_BOX = { xMin: S(200), xMax: S(1400), yMin: S(3400), yMax: S(4600) };
-const FIELD1_BOX = { xMin: S(1700), xMax: S(3100), yMin: S(100), yMax: S(1500) };
-const FIELD2_BOX = { xMin: S(3300), xMax: S(4700), yMin: S(1700), yMax: S(3100) };
-const FIELD3_BOX = { xMin: S(1700), xMax: S(3100), yMin: S(3300), yMax: S(4700) };
-const FIELD4_BOX = { xMin: S(100), xMax: S(1500), yMin: S(1700), yMax: S(3100) };
-const FIELD5_BOX = { xMin: S(100), xMax: S(1500), yMin: S(100), yMax: S(1500) };
-const FIELD6_BOX = { xMin: S(3300), xMax: S(4700), yMin: S(100), yMax: S(1500) };
-const FIELD7_BOX = { xMin: S(3300), xMax: S(4700), yMin: S(3300), yMax: S(4700) };
+const CAPITAL_BOX = { xMin: S(100), xMax: S(1300), yMin: S(3600), yMax: S(4700) };
+const FIELD1_BOX = { xMin: S(100), xMax: S(1300), yMin: S(2400), yMax: S(3600) };
+const FIELD2_BOX = { xMin: S(100), xMax: S(1300), yMin: S(1300), yMax: S(2400) };
+const FIELD4_BOX = { xMin: S(100), xMax: S(1300), yMin: S(100), yMax: S(1300) };
+const SECOND_CITY_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(100), yMax: S(1300) };
+const VILLAGE_BOX = { xMin: S(1300), xMax: S(2000), yMin: S(1300), yMax: S(1900) };
+const GREEN_FOREST_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(1900), yMax: S(3000) };
+const WATER_TEMPLE_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(3000), yMax: S(4700) };
+const FIELD6_BOX = { xMin: S(2500), xMax: S(3700), yMin: S(100), yMax: S(2600) };
+const FIELD3_BOX = { xMin: S(2500), xMax: S(3700), yMin: S(2600), yMax: S(4700) };
+const FIELD5_BOX = { xMin: S(3700), xMax: S(4700), yMin: S(100), yMax: S(1700) };
+const FIELD7_BOX = { xMin: S(3700), xMax: S(4700), yMin: S(1700), yMax: S(4700) };
 function inBox(x, y, b) { return x >= b.xMin && x < b.xMax && y >= b.yMin && y < b.yMax; }
 
 // 밝고 경쾌한 판타지 톤(메이플스토리풍) — [기본색A, 기본색B, 포인트 텍스처색]
@@ -1446,6 +1449,9 @@ const REGION_PALETTE = {
   void: ['#a9cfe0', '#9fc4d6'],
   capital: ['#93938d', '#84847e', '#6f6f68'],
   frontier: ['#a9b4bd', '#9ba7b1', '#828f9a'],
+  village: ['#a3a878', '#94996a', '#7c8055'],       // 마을 — 소박한 흙빛 초원
+  greenforest: ['#2f6b3a', '#295f33', '#1f4a28'],   // 그린 숲 — 짙은 숲
+  watertemple: ['#4a8ca0', '#417d90', '#356875'],   // 물의 신전 — 푸른 유적
   field1: ['#5ea23f', '#549236', '#e8c23f'],   // 들꽃 초원 — 잔디 + 노란 꽃
   field2: ['#c2812f', '#b17225', '#8a5620'],   // 황혼 언덕 — 노을빛 들판
   field3: ['#3f8a6f', '#357a61', '#2a6350'],   // 축축한 습지
@@ -1460,6 +1466,9 @@ function regionTint(x, y) {
   if (WORLD.w <= VIEW_W) return REGION_PALETTE.void;
   if (inBox(x, y, CAPITAL_BOX)) return REGION_PALETTE.capital;
   if (inBox(x, y, SECOND_CITY_BOX)) return REGION_PALETTE.frontier;
+  if (inBox(x, y, VILLAGE_BOX)) return REGION_PALETTE.village;
+  if (inBox(x, y, GREEN_FOREST_BOX)) return REGION_PALETTE.greenforest;
+  if (inBox(x, y, WATER_TEMPLE_BOX)) return REGION_PALETTE.watertemple;
   if (inBox(x, y, FIELD1_BOX)) return REGION_PALETTE.field1;
   if (inBox(x, y, FIELD2_BOX)) return REGION_PALETTE.field2;
   if (inBox(x, y, FIELD3_BOX)) return REGION_PALETTE.field3;
@@ -1513,6 +1522,7 @@ const REGION_BOXES = [
   // 필드의 울퉁불퉁한 해안선이 도시 쪽으로 넉넉히 뻗어나가도 도시 광장은 항상 깔끔하게 유지됨
   ['field1', FIELD1_BOX], ['field2', FIELD2_BOX], ['field3', FIELD3_BOX], ['field4', FIELD4_BOX],
   ['field5', FIELD5_BOX], ['field6', FIELD6_BOX], ['field7', FIELD7_BOX],
+  ['village', VILLAGE_BOX], ['greenforest', GREEN_FOREST_BOX], ['watertemple', WATER_TEMPLE_BOX],
   ['capital', CAPITAL_BOX], ['frontier', SECOND_CITY_BOX],
 ];
 
@@ -1771,6 +1781,7 @@ const TREE_TINTS = {
   field2: { A: '#a8963f', B: '#8c7a2f', C: '#6e4a28' },
   field3: { A: '#3a8f7a', B: '#2c7060', C: '#5c4530' },
   field5: { A: '#cfe6ee', B: '#aecdd9', C: '#8a7460' },
+  greenforest: { A: '#2e7d3a', B: '#1f5e2a', C: '#4a3420' },
   default: { A: '#4f9c3a', B: '#3d7e2c', C: '#7a5230' },
 };
 const ROCK_TINTS = {
@@ -2542,8 +2553,8 @@ function drawOverviewBox(mx, my, scaleX, scaleY, box, color, blobKey) {
 
 // 필드마다 소재지 역할을 하는 도시로 흙길이 이어진다는 설정 — 레이드 접수처가 있는 도시와 동일
 const FIELD_HUB_BOX = {
-  field1: CAPITAL_BOX, field2: CAPITAL_BOX, field5: CAPITAL_BOX, field6: CAPITAL_BOX,
-  field3: SECOND_CITY_BOX, field4: SECOND_CITY_BOX, field7: SECOND_CITY_BOX,
+  field1: CAPITAL_BOX, field2: CAPITAL_BOX, field3: CAPITAL_BOX,
+  field4: SECOND_CITY_BOX, field5: SECOND_CITY_BOX, field6: SECOND_CITY_BOX, field7: SECOND_CITY_BOX,
 };
 function regionCenter(box) { return { x: (box.xMin + box.xMax) / 2, y: (box.yMin + box.yMax) / 2 }; }
 
@@ -2575,6 +2586,9 @@ function drawWorldOverview(mx, my, mw, mh, showLabels) {
     drawOverviewBox(mx, my, scaleX, scaleY, FIELD5_BOX, REGION_PALETTE.field5[0], 'field5');
     drawOverviewBox(mx, my, scaleX, scaleY, FIELD6_BOX, REGION_PALETTE.field6[0], 'field6');
     drawOverviewBox(mx, my, scaleX, scaleY, FIELD7_BOX, REGION_PALETTE.field7[0], 'field7');
+    drawOverviewBox(mx, my, scaleX, scaleY, VILLAGE_BOX, REGION_PALETTE.village[0], 'village');
+    drawOverviewBox(mx, my, scaleX, scaleY, GREEN_FOREST_BOX, REGION_PALETTE.greenforest[0], 'greenforest');
+    drawOverviewBox(mx, my, scaleX, scaleY, WATER_TEMPLE_BOX, REGION_PALETTE.watertemple[0], 'watertemple');
     drawOverviewBox(mx, my, scaleX, scaleY, CAPITAL_BOX, REGION_PALETTE.capital[0]);
     drawOverviewBox(mx, my, scaleX, scaleY, SECOND_CITY_BOX, REGION_PALETTE.frontier[0]);
   }
@@ -2613,6 +2627,7 @@ function drawWorldOverview(mx, my, mw, mh, showLabels) {
     const labelBoxes = [
       [FIELD1_BOX, '들꽃 초원'], [FIELD2_BOX, '황혼 언덕'], [FIELD3_BOX, '축축한 습지'], [FIELD4_BOX, '메마른 협곡'],
       [FIELD5_BOX, '얼어붙은 봉우리'], [FIELD6_BOX, '불타는 사막'], [FIELD7_BOX, '잊혀진 폐허'],
+      [VILLAGE_BOX, '마을'], [GREEN_FOREST_BOX, '그린 숲'], [WATER_TEMPLE_BOX, '물의 신전'],
       [CAPITAL_BOX, '대도시'], [SECOND_CITY_BOX, '변방 도시'],
     ];
     for (const [box, name] of labelBoxes) {

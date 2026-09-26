@@ -265,23 +265,35 @@ const MATERIAL_INFO = {
   ruinSentinel: { name: '파수병의 문장', price: 40 },
 };
 
-// ── 오픈월드 지역 정의 — 4800×4800을 3×3 칸(칸당 1600)으로 나눠 빈 공간 없이 채움 ──
+// ── 오픈월드 지역 정의 — 사용자가 그려준 지도(인접 관계) 그대로 재배치(v3.1) ──
+// 대도시(좌하단) — 들꽃초원 — 황혼언덕 — 메마른협곡(좌상단) 세로줄
+// 변방도시(상단) — 마을 — 그린숲 — 물의신전 세로줄(가운데, 마을/그린숲/물의신전은 장식/통로 전용 지역)
+// 불타는사막 — 축축한습지 세로줄(가운데-우측), 얼어붙은봉우리 — 잊혀진폐허 세로줄(우측)
 function S(n) { return n * WORLD_SCALE; }
-const CAPITAL_BOX = { xMin: S(1800), xMax: S(3000), yMin: S(1800), yMax: S(3000) };       // 중앙 — 진짜 도시처럼 넓게
-const SECOND_CITY_BOX = { xMin: S(200), xMax: S(1400), yMin: S(3400), yMax: S(4600) };    // 남서쪽 칸
-const FIELD1_BOX = { xMin: S(1700), xMax: S(3100), yMin: S(100), yMax: S(1500) };        // 북쪽 칸
-const FIELD2_BOX = { xMin: S(3300), xMax: S(4700), yMin: S(1700), yMax: S(3100) };       // 동쪽 칸
-const FIELD3_BOX = { xMin: S(1700), xMax: S(3100), yMin: S(3300), yMax: S(4700) };       // 남쪽 칸
-const FIELD4_BOX = { xMin: S(100), xMax: S(1500), yMin: S(1700), yMax: S(3100) };        // 서쪽 칸
-const FIELD5_BOX = { xMin: S(100), xMax: S(1500), yMin: S(100), yMax: S(1500) };         // 북서쪽 칸
-const FIELD6_BOX = { xMin: S(3300), xMax: S(4700), yMin: S(100), yMax: S(1500) };        // 북동쪽 칸
-const FIELD7_BOX = { xMin: S(3300), xMax: S(4700), yMin: S(3300), yMax: S(4700) };       // 남동쪽 칸
+const CAPITAL_BOX = { xMin: S(100), xMax: S(1300), yMin: S(3600), yMax: S(4700) };        // 좌하단
+const FIELD1_BOX = { xMin: S(100), xMax: S(1300), yMin: S(2400), yMax: S(3600) };        // 들꽃 초원
+const FIELD2_BOX = { xMin: S(100), xMax: S(1300), yMin: S(1300), yMax: S(2400) };        // 황혼 언덕
+const FIELD4_BOX = { xMin: S(100), xMax: S(1300), yMin: S(100), yMax: S(1300) };         // 메마른 협곡(좌상단)
+
+const SECOND_CITY_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(100), yMax: S(1300) };    // 변방 도시(상단)
+const VILLAGE_BOX = { xMin: S(1300), xMax: S(2000), yMin: S(1300), yMax: S(1900) };       // 마을(장식 전용, 소형)
+const GREEN_FOREST_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(1900), yMax: S(3000) };  // 그린 숲(장식 전용)
+const WATER_TEMPLE_BOX = { xMin: S(1300), xMax: S(2500), yMin: S(3000), yMax: S(4700) };  // 물의 신전(장식 전용)
+
+const FIELD6_BOX = { xMin: S(2500), xMax: S(3700), yMin: S(100), yMax: S(2600) };        // 불타는 사막
+const FIELD3_BOX = { xMin: S(2500), xMax: S(3700), yMin: S(2600), yMax: S(4700) };       // 축축한 습지
+
+const FIELD5_BOX = { xMin: S(3700), xMax: S(4700), yMin: S(100), yMax: S(1700) };        // 얼어붙은 봉우리
+const FIELD7_BOX = { xMin: S(3700), xMax: S(4700), yMin: S(1700), yMax: S(4700) };       // 잊혀진 폐허
 
 function inBox(x, y, b) { return x >= b.xMin && x < b.xMax && y >= b.yMin && y < b.yMax; }
 
 function regionAt(x, y) {
   if (inBox(x, y, CAPITAL_BOX)) return { key: 'capital', name: '대도시' };
   if (inBox(x, y, SECOND_CITY_BOX)) return { key: 'frontier', name: '변방 도시' };
+  if (inBox(x, y, VILLAGE_BOX)) return { key: 'village', name: '마을' };
+  if (inBox(x, y, GREEN_FOREST_BOX)) return { key: 'greenforest', name: '그린 숲' };
+  if (inBox(x, y, WATER_TEMPLE_BOX)) return { key: 'watertemple', name: '물의 신전' };
   if (inBox(x, y, FIELD1_BOX)) return { key: 'field1', name: '들꽃 초원' };
   if (inBox(x, y, FIELD2_BOX)) return { key: 'field2', name: '황혼 언덕' };
   if (inBox(x, y, FIELD3_BOX)) return { key: 'field3', name: '축축한 습지' };
@@ -302,19 +314,20 @@ const ZONE_DEFS = {
   field7: { name: '잊혀진 폐허', monsterTypes: ['bat', 'golem'], monsterCount: 14, bossType: 'ruinGuardian', eliteType: 'ruinSentinel', box: FIELD7_BOX },
 };
 
-const TOWN_ENTRY = { x: S(2400), y: S(2580) }; // 대도시 — 기본 스폰 지점
+const TOWN_ENTRY = { x: S(700), y: S(4330) }; // 대도시 — 기본 스폰 지점
 const RAID_ENTRY = { x: 700, y: 780 }; // 레이드 아레나는 별도 월드라 스케일 영향 없음
 
 const LANDMARKS = [
-  { key: 'capital_fountain', x: S(2400), y: S(2400), r: 75, kind: 'fountain' },
-  { key: 'frontier_fountain', x: S(800), y: S(4000), r: 58, kind: 'fountain' },
-  { key: 'field1_raid', x: S(1900), y: S(1700), r: 40, kind: 'raid_entrance', zoneKey: 'field1' },
-  { key: 'field2_raid', x: S(3800), y: S(1900), r: 40, kind: 'raid_entrance', zoneKey: 'field2' },
-  { key: 'field3_raid', x: S(2400), y: S(3600), r: 40, kind: 'raid_entrance', zoneKey: 'field3' },
-  { key: 'field4_raid', x: S(1200), y: S(2000), r: 40, kind: 'raid_entrance', zoneKey: 'field4' },
-  { key: 'field5_raid', x: S(1100), y: S(500), r: 40, kind: 'raid_entrance', zoneKey: 'field5' },
-  { key: 'field6_raid', x: S(3700), y: S(1100), r: 40, kind: 'raid_entrance', zoneKey: 'field6' },
-  { key: 'field7_raid', x: S(4300), y: S(3600), r: 40, kind: 'raid_entrance', zoneKey: 'field7' },
+  { key: 'capital_fountain', x: S(700), y: S(4150), r: 75, kind: 'fountain' },
+  { key: 'frontier_fountain', x: S(1900), y: S(700), r: 58, kind: 'fountain' },
+  { key: 'water_temple_fountain', x: S(1900), y: S(3850), r: 46, kind: 'fountain' }, // 물의 신전 — 장식용 분수
+  { key: 'field1_raid', x: S(700), y: S(3000), r: 40, kind: 'raid_entrance', zoneKey: 'field1' },
+  { key: 'field2_raid', x: S(700), y: S(1850), r: 40, kind: 'raid_entrance', zoneKey: 'field2' },
+  { key: 'field3_raid', x: S(3100), y: S(3650), r: 40, kind: 'raid_entrance', zoneKey: 'field3' },
+  { key: 'field4_raid', x: S(700), y: S(700), r: 40, kind: 'raid_entrance', zoneKey: 'field4' },
+  { key: 'field5_raid', x: S(4200), y: S(900), r: 40, kind: 'raid_entrance', zoneKey: 'field5' },
+  { key: 'field6_raid', x: S(3100), y: S(1350), r: 40, kind: 'raid_entrance', zoneKey: 'field6' },
+  { key: 'field7_raid', x: S(4200), y: S(3200), r: 40, kind: 'raid_entrance', zoneKey: 'field7' },
 ];
 
 // ── NPC / 퀘스트 — NPC 하나당 고정 퀘스트 하나(체인 없음), 완료 후에도 다시 받을 수는 없음 ──
@@ -325,10 +338,10 @@ const QUEST_DEFS = {
   q_scorpion: { name: '협곡의 전갈 사냥', npcId: 'npc_frontier_2', monsterKind: 'scorpion', targetCount: 4, rewardGold: 100, rewardExp: 40, desc: '메마른 협곡의 전갈이 말썽이야. 4마리만 처치해주게.' },
 };
 const NPC_DEFS = {
-  npc_capital_1: { name: '촌장', x: S(2000), y: S(2650) },
-  npc_capital_2: { name: '용병', x: S(2800), y: S(2650) },
-  npc_frontier_1: { name: '약초꾼', x: S(400), y: S(4200) },
-  npc_frontier_2: { name: '사냥꾼', x: S(1000), y: S(4200) },
+  npc_capital_1: { name: '촌장', x: S(300), y: S(4400) },
+  npc_capital_2: { name: '용병', x: S(1100), y: S(4400) },
+  npc_frontier_1: { name: '약초꾼', x: S(1500), y: S(900) },
+  npc_frontier_2: { name: '사냥꾼', x: S(2100), y: S(900) },
 };
 function questIdForNpc(npcId) { return Object.keys(QUEST_DEFS).find(k => QUEST_DEFS[k].npcId === npcId); }
 function questStateFor(user, questId) {
@@ -367,33 +380,33 @@ function layoutRow(centerX, y, items, w, h, gap) {
 
 const WORLD_PORTALS = [
   // 대도시 — 분수 광장을 중심으로 북쪽엔 레이드 접수처, 서/동쪽엔 상점·대장간이 늘어선 큰 도시
-  ...layoutRow(S(2400), S(1950), [
+  ...layoutRow(S(700), S(3700), [
     { id: 'raid_field1', label: '초원 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field1' } },
     { id: 'raid_field2', label: '언덕 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field2' } },
+    { id: 'raid_field3', label: '습지 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field3' } },
+  ], 140, 55, 16),
+  { id: 'shop_capital', x: S(200), y: S(4100), w: 140, h: 60, label: '상점', action: { type: 'shop' } },
+  { id: 'blacksmith_capital', x: S(1060), y: S(4100), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
+  { id: 'skillshop_capital', x: S(200), y: S(4210), w: 140, h: 60, label: '스킬 상점', action: { type: 'skill_shop' } },
+  { id: 'guildhall_capital', x: S(1060), y: S(4210), w: 140, h: 60, label: '마을 회관', action: { type: 'guild_hall' } },
+  { id: 'market_capital', x: S(630), y: S(4210), w: 140, h: 60, label: '거래장터', action: { type: 'market' } },
+  // 변방 도시
+  ...layoutRow(S(1900), S(250), [
+    { id: 'raid_field4', label: '협곡 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field4' } },
     { id: 'raid_field5', label: '봉우리 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field5' } },
     { id: 'raid_field6', label: '사막 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field6' } },
-  ], 140, 55, 16),
-  { id: 'shop_capital', x: S(1900), y: S(2350), w: 140, h: 60, label: '상점', action: { type: 'shop' } },
-  { id: 'blacksmith_capital', x: S(2760), y: S(2350), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
-  { id: 'skillshop_capital', x: S(1900), y: S(2460), w: 140, h: 60, label: '스킬 상점', action: { type: 'skill_shop' } },
-  { id: 'guildhall_capital', x: S(2760), y: S(2460), w: 140, h: 60, label: '마을 회관', action: { type: 'guild_hall' } },
-  { id: 'market_capital', x: S(2330), y: S(2460), w: 140, h: 60, label: '거래장터', action: { type: 'market' } },
-  // 변방 도시
-  ...layoutRow(S(800), S(3550), [
-    { id: 'raid_field3', label: '습지 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field3' } },
-    { id: 'raid_field4', label: '협곡 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field4' } },
     { id: 'raid_field7', label: '폐허 레이드 접수처', action: { type: 'raid_list', zoneKey: 'field7' } },
   ], 140, 55, 16),
-  { id: 'shop_frontier', x: S(280), y: S(3950), w: 140, h: 60, label: '상점', action: { type: 'shop' } },
-  { id: 'blacksmith_frontier', x: S(1140), y: S(3950), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
-  { id: 'skillshop_frontier', x: S(280), y: S(4060), w: 140, h: 60, label: '스킬 상점', action: { type: 'skill_shop' } },
-  { id: 'guildhall_frontier', x: S(1140), y: S(4060), w: 140, h: 60, label: '마을 회관', action: { type: 'guild_hall' } },
-  { id: 'market_frontier', x: S(710), y: S(4060), w: 140, h: 60, label: '거래장터', action: { type: 'market' } },
+  { id: 'shop_frontier', x: S(1380), y: S(650), w: 140, h: 60, label: '상점', action: { type: 'shop' } },
+  { id: 'blacksmith_frontier', x: S(2240), y: S(650), w: 140, h: 60, label: '대장간', action: { type: 'blacksmith' } },
+  { id: 'skillshop_frontier', x: S(1380), y: S(760), w: 140, h: 60, label: '스킬 상점', action: { type: 'skill_shop' } },
+  { id: 'guildhall_frontier', x: S(2240), y: S(760), w: 140, h: 60, label: '마을 회관', action: { type: 'guild_hall' } },
+  { id: 'market_frontier', x: S(1810), y: S(760), w: 140, h: 60, label: '거래장터', action: { type: 'market' } },
   // NPC — 퀘스트를 주는 마을 주민들
-  { id: 'npc_capital_1', x: S(1950), y: S(2620), w: 100, h: 60, label: '촌장', action: { type: 'npc', npcId: 'npc_capital_1' } },
-  { id: 'npc_capital_2', x: S(2750), y: S(2620), w: 100, h: 60, label: '용병', action: { type: 'npc', npcId: 'npc_capital_2' } },
-  { id: 'npc_frontier_1', x: S(350), y: S(4170), w: 100, h: 60, label: '약초꾼', action: { type: 'npc', npcId: 'npc_frontier_1' } },
-  { id: 'npc_frontier_2', x: S(950), y: S(4170), w: 100, h: 60, label: '사냥꾼', action: { type: 'npc', npcId: 'npc_frontier_2' } },
+  { id: 'npc_capital_1', x: S(250), y: S(4370), w: 100, h: 60, label: '촌장', action: { type: 'npc', npcId: 'npc_capital_1' } },
+  { id: 'npc_capital_2', x: S(1050), y: S(4370), w: 100, h: 60, label: '용병', action: { type: 'npc', npcId: 'npc_capital_2' } },
+  { id: 'npc_frontier_1', x: S(1450), y: S(870), w: 100, h: 60, label: '약초꾼', action: { type: 'npc', npcId: 'npc_frontier_1' } },
+  { id: 'npc_frontier_2', x: S(2050), y: S(870), w: 100, h: 60, label: '사냥꾼', action: { type: 'npc', npcId: 'npc_frontier_2' } },
 ];
 
 // ── 장애물(나무/바위) — 필드마다 흩뿌려서 시야를 막고 길찾기 재미를 더함 ──
@@ -470,6 +483,12 @@ const OBSTACLES = [
   ...scatterObstacles(SECOND_CITY_BOX, 'stall', 8, 26),
   ...ringObstacles(CAPITAL_BOX, 'wallSeg', 32, 20, 34),
   ...ringObstacles(SECOND_CITY_BOX, 'wallSeg', 24, 20, 34),
+  // 마을/그린 숲/물의 신전 — 지도 개편으로 새로 생긴 통로용 지역(장식 전용, 몬스터·퀘스트 없음)
+  ...scatterObstacles(VILLAGE_BOX, 'house', 5, 28),          // 마을 — 작은 민가 몇 채
+  ...scatterObstacles(GREEN_FOREST_BOX, 'tree', 30),         // 그린 숲 — 이름값 하는 빽빽한 숲
+  ...scatterObstacles(GREEN_FOREST_BOX, 'structure', 3),
+  ...scatterObstacles(WATER_TEMPLE_BOX, 'totem', 6),         // 물의 신전 — 유적 느낌의 토템·폐벽
+  ...scatterObstacles(WATER_TEMPLE_BOX, 'ruinWall', 5),
 ];
 
 // ── 장식(꽃/흙길) — 충돌 없이 순수 시각 요소, 서버가 위치를 고정해서 모두에게 동일하게 보이게 함 ──
@@ -509,8 +528,8 @@ const FIELD_KEYS = ['field1', 'field2', 'field3', 'field4', 'field5', 'field6', 
 const FIELD_BOXES = { field1: FIELD1_BOX, field2: FIELD2_BOX, field3: FIELD3_BOX, field4: FIELD4_BOX, field5: FIELD5_BOX, field6: FIELD6_BOX, field7: FIELD7_BOX };
 // 필드마다 소재지 역할을 하는 도시 — 레이드 접수처가 있는 도시와 동일하게 매핑
 const FIELD_HUB_BOX = {
-  field1: CAPITAL_BOX, field2: CAPITAL_BOX, field5: CAPITAL_BOX, field6: CAPITAL_BOX,
-  field3: SECOND_CITY_BOX, field4: SECOND_CITY_BOX, field7: SECOND_CITY_BOX,
+  field1: CAPITAL_BOX, field2: CAPITAL_BOX, field3: CAPITAL_BOX,
+  field4: SECOND_CITY_BOX, field5: SECOND_CITY_BOX, field6: SECOND_CITY_BOX, field7: SECOND_CITY_BOX,
 };
 
 const DECORATIONS = [
@@ -522,6 +541,9 @@ const DECORATIONS = [
   ...scatterDecorations(FIELD5_BOX, 'flower', 24),
   ...scatterDecorations(FIELD6_BOX, 'dirt', 34),
   ...scatterDecorations(FIELD7_BOX, 'dirt', 28),
+  ...scatterDecorations(VILLAGE_BOX, 'flower', 10),
+  ...scatterDecorations(GREEN_FOREST_BOX, 'flower', 16),
+  ...scatterDecorations(WATER_TEMPLE_BOX, 'dirt', 20),
   // 지역 중심에서 레이드 입구까지 흙길
   ...FIELD_KEYS.flatMap(key => {
     const raidLm = LANDMARKS.find(l => l.kind === 'raid_entrance' && l.zoneKey === key);
