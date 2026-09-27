@@ -348,11 +348,24 @@ const ZONE_DEFS = {
 };
 
 const TOWN_ENTRY = { x: S(700), y: S(4330) }; // 대도시 — 기본 스폰 지점
+const FRONTIER_ENTRY = { x: S(1900), y: S(880) }; // 변방 도시 — 홈타운으로 설정 시 스폰 지점
 const RAID_ENTRY = { x: 700, y: 780 }; // 레이드 아레나는 별도 월드라 스케일 영향 없음
+
+// ── 홈타운 — 분수 근처에서 설정하면 이후 로그인·리스폰·레이드 이탈 시 그 도시로 스폰 ──
+const HOME_TOWNS = {
+  capital: { name: '대도시', entry: TOWN_ENTRY },
+  frontier: { name: '변방 도시', entry: FRONTIER_ENTRY },
+};
+function homeEntryFor(user) {
+  const town = HOME_TOWNS[user.homeTown];
+  return town ? town.entry : TOWN_ENTRY;
+}
 
 const LANDMARKS = [
   { key: 'capital_fountain', x: S(700), y: S(4150), r: 75, kind: 'fountain' },
   { key: 'frontier_fountain', x: S(1900), y: S(700), r: 58, kind: 'fountain' },
+  { key: 'capital_hometown', x: S(700), y: S(4150), r: 90, kind: 'hometown_shrine', townKey: 'capital' },
+  { key: 'frontier_hometown', x: S(1900), y: S(700), r: 90, kind: 'hometown_shrine', townKey: 'frontier' },
   { key: 'water_temple_fountain', x: S(1900), y: S(3850), r: 46, kind: 'fountain' }, // 물의 신전 — 장식용 분수
   { key: 'field1_raid', x: S(700), y: S(3000), r: 40, kind: 'raid_entrance', zoneKey: 'field1' },
   { key: 'field2_raid', x: S(700), y: S(1850), r: 40, kind: 'raid_entrance', zoneKey: 'field2' },
@@ -470,7 +483,8 @@ function scatterObstacles(box, kind, count, radius) {
 }
 
 // 도시 외곽을 두르는 성벽 — 상점/대장간/레이드 접수처 앞은 자동으로 비워져서 성문처럼 뚫림
-function ringObstacles(box, kind, count, inset, radius) {
+// gates: 인접한 신규 필드(마을/그린 숲/물의 신전)로 이어지는 흙길이 성벽을 통과하는 지점 — 그 앞도 성문처럼 비움
+function ringObstacles(box, kind, count, inset, radius, gates) {
   const w = box.xMax - box.xMin, h = box.yMax - box.yMin;
   const perim = 2 * (w + h);
   const list = [];
@@ -483,11 +497,21 @@ function ringObstacles(box, kind, count, inset, radius) {
     else { x = box.xMin + inset; y = box.yMax - (d - 2 * w - h); }
     const tooClosePortal = WORLD_PORTALS.some(p => x > p.x - 90 && x < p.x + p.w + 90 && y > p.y - 90 && y < p.y + p.h + 90);
     const tooCloseLandmark = LANDMARKS.some(lm => Math.hypot(x - lm.x, y - lm.y) < lm.r + 90);
-    if (tooClosePortal || tooCloseLandmark) continue;
+    const tooCloseGate = (gates || []).some(g => Math.hypot(x - g.x, y - g.y) < g.r);
+    if (tooClosePortal || tooCloseLandmark || tooCloseGate) continue;
     list.push({ x, y, r: radius, kind });
   }
   return list;
 }
+
+// 마을/그린 숲/물의 신전이 도시와 맞닿는 경계 지점 — 성벽에 이 지점을 성문처럼 뚫어서 필드↔도시 이동 통로를 보장
+const FRONTIER_SOUTH_GATES = [
+  { x: (VILLAGE_BOX.xMin + VILLAGE_BOX.xMax) / 2, y: SECOND_CITY_BOX.yMax, r: 110 },      // 마을 방향 성문
+  { x: (GREEN_FOREST_BOX.xMin + GREEN_FOREST_BOX.xMax) / 2, y: SECOND_CITY_BOX.yMax, r: 110 }, // 그린 숲 방향 성문
+];
+const CAPITAL_EAST_GATES = [
+  { x: CAPITAL_BOX.xMax, y: (WATER_TEMPLE_BOX.yMin + WATER_TEMPLE_BOX.yMax) / 2, r: 110 }, // 물의 신전 방향 성문
+];
 
 const OBSTACLES = [
   // 지역이 2배로 커진(WORLD_SCALE) 뒤로 필드가 휑해 보여서 밀도를 다시 채움(면적 4배 → 대략 2.5배로 보강)
@@ -520,8 +544,8 @@ const OBSTACLES = [
   ...scatterObstacles(CAPITAL_BOX, 'stall', 12, 26),
   ...scatterObstacles(SECOND_CITY_BOX, 'house', 20, 30),
   ...scatterObstacles(SECOND_CITY_BOX, 'stall', 8, 26),
-  ...ringObstacles(CAPITAL_BOX, 'wallSeg', 32, 20, 34),
-  ...ringObstacles(SECOND_CITY_BOX, 'wallSeg', 24, 20, 34),
+  ...ringObstacles(CAPITAL_BOX, 'wallSeg', 32, 20, 34, CAPITAL_EAST_GATES),
+  ...ringObstacles(SECOND_CITY_BOX, 'wallSeg', 24, 20, 34, FRONTIER_SOUTH_GATES),
   // 마을/그린 숲/물의 신전 — 지도 개편으로 새로 생긴 필드(몬스터·엘리트·레이드 보스 포함)
   ...scatterObstacles(VILLAGE_BOX, 'house', 5, 28),          // 마을 — 작은 민가 몇 채
   ...scatterObstacles(GREEN_FOREST_BOX, 'tree', 30),         // 그린 숲 — 이름값 하는 빽빽한 숲
@@ -958,15 +982,37 @@ function checkRaidEntrance(player, room, now) {
   }
 }
 
+function checkHomeTownEntrance(player, room, now) {
+  if (room.kind !== 'world') {
+    if (player.homeTownPromptZone) { player.homeTownPromptZone = null; sendTo(player, { type: 'hometown_prompt', show: false }); }
+    return;
+  }
+  let insideTown = null;
+  for (const lm of room.landmarks) {
+    if (lm.kind !== 'hometown_shrine') continue;
+    if (Math.hypot(player.x - lm.x, player.y - lm.y) < lm.r) { insideTown = lm.townKey; break; }
+  }
+  if (insideTown && player.homeTownPromptZone !== insideTown) {
+    player.homeTownPromptZone = insideTown;
+    sendTo(player, {
+      type: 'hometown_prompt', show: true, townKey: insideTown, townName: HOME_TOWNS[insideTown].name,
+      isCurrent: (player.user.homeTown || 'capital') === insideTown,
+    });
+  } else if (!insideTown && player.homeTownPromptZone) {
+    player.homeTownPromptZone = null;
+    sendTo(player, { type: 'hometown_prompt', show: false });
+  }
+}
+
 // ── 전투 ────────────────────────────────────────────────
 function handlePlayerDefeated(room, target, dmg) {
   target.vx = 0; target.vy = 0; target.stunUntil = 0; target.slowUntil = 0;
   if (room.kind === 'raid') {
     target.hp = target.maxHp;
     sendTo(target, { type: 'player_hit', damage: dmg, hp: target.hp, maxHp: target.maxHp, x: target.x, y: target.y, stunMs: 0, defeated: true });
-    movePlayerToRoom(target, 'world', jitter(TOWN_ENTRY));
+    movePlayerToRoom(target, 'world', jitter(homeEntryFor(target.user)));
   } else {
-    const sp = jitter(TOWN_ENTRY);
+    const sp = jitter(homeEntryFor(target.user));
     target.x = sp.x; target.y = sp.y;
     target.hp = target.maxHp;
     sendTo(target, { type: 'player_hit', damage: dmg, hp: target.hp, maxHp: target.maxHp, x: target.x, y: target.y, stunMs: 0, defeated: true });
@@ -1179,7 +1225,7 @@ function applyHitToMonster(room, player, m, dmg, now) {
       setTimeout(() => {
         const r = rooms.get(roomId);
         if (!r) return;
-        for (const p of [...r.players.values()]) movePlayerToRoom(p, 'world', jitter(TOWN_ENTRY));
+        for (const p of [...r.players.values()]) movePlayerToRoom(p, 'world', jitter(homeEntryFor(p.user)));
         rooms.delete(roomId);
       }, 3000);
     } else {
@@ -1415,6 +1461,7 @@ function tick(dt) {
 
       checkPortals(p, room, now);
       checkRaidEntrance(p, room, now);
+      checkHomeTownEntrance(p, room, now);
     }
 
     updateMonsters(room, dt, now);
@@ -1471,7 +1518,7 @@ function handleLogin(ws, msg) {
 function spawnPlayerForUser(ws, user) {
   const id = nextId++;
   const worldRoom = rooms.get('world');
-  const spawn = jitter(TOWN_ENTRY);
+  const spawn = jitter(homeEntryFor(user));
   if (!user.equippedSkills) user.equippedSkills = [null, null];
   if (!user.ownedSkills) user.ownedSkills = [];
   if (!user.stats) user.stats = { hp: 0, speed: 0, dmg: 0, magic: 0 };
@@ -1483,7 +1530,7 @@ function spawnPlayerForUser(ws, user) {
     level: user.level, exp: user.exp,
     gold: user.gold, weapon: user.weapon, inventory: user.inventory,
     lastAttackAt: 0, stunUntil: 0, slowUntil: 0, guardUntil: 0,
-    raidEntranceZone: null, activePortalId: null,
+    raidEntranceZone: null, activePortalId: null, homeTownPromptZone: null,
     roomId: 'world',
     classKey: user.classKey || 'warrior', skillCooldownAt: [0, 0], guildTag: null,
     input: { up: false, down: false, left: false, right: false },
@@ -1503,10 +1550,12 @@ function spawnPlayerForUser(ws, user) {
     level: user.level, gold: user.gold, statPoints: user.statPoints, stats: user.stats,
     ownedSkills: user.ownedSkills, equippedSkills: user.equippedSkills, hasMap: !!user.hasMap, hasSeenTutorial: !!user.hasSeenTutorial,
     guild: guild ? publicGuild(guild) : null, isGuildOwner: !!(guild && guild.ownerUsername === user.username),
+    homeTownName: HOME_TOWNS[user.homeTown || 'capital'].name,
   });
   sendTo(player, { type: 'welcome', id, tickMs: 1000 / TICK_RATE, self: { hp: player.hp, maxHp: player.maxHp, level: player.level } });
+  const spawnRegion = regionAt(player.x, player.y);
   sendTo(player, {
-    type: 'zone_change', zoneKey: 'capital', zoneName: '대도시',
+    type: 'zone_change', zoneKey: spawnRegion.key, zoneName: spawnRegion.name,
     x: player.x, y: player.y, world: OVERWORLD,
     landmarks: LANDMARKS, portals: WORLD_PORTALS, obstacles: OBSTACLES, decorations: DECORATIONS, isRaid: false,
   });
@@ -1890,7 +1939,12 @@ wss.on('connection', ws => {
     } else if (msg.type === 'raid_leave') {
       const room = rooms.get(player.roomId);
       if (!room || room.kind !== 'raid') return;
-      movePlayerToRoom(player, 'world', jitter(TOWN_ENTRY));
+      movePlayerToRoom(player, 'world', jitter(homeEntryFor(player.user)));
+    } else if (msg.type === 'set_home_town' && HOME_TOWNS[msg.townKey]) {
+      if (player.homeTownPromptZone !== msg.townKey) return; // 해당 도시 분수 근처에 있을 때만 설정 가능
+      player.user.homeTown = msg.townKey;
+      saveUsers();
+      sendTo(player, { type: 'hometown_set', townKey: msg.townKey, townName: HOME_TOWNS[msg.townKey].name });
     } else if (msg.type === 'chat') {
       const now = Date.now();
       if (now - (player.lastChatAt || 0) < 400) return;

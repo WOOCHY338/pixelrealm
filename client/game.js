@@ -8,11 +8,15 @@ const levelReadout = document.getElementById('levelReadout');
 const goldReadout = document.getElementById('goldReadout');
 const weaponReadout = document.getElementById('weaponReadout');
 const zoneReadout = document.getElementById('zoneReadout');
+const homeTownReadout = document.getElementById('homeTownReadout');
 const statusEl = document.getElementById('status');
 const bannerEl = document.getElementById('banner');
 const zoneBannerEl = document.getElementById('zoneBanner');
 const leaveRaidBtn = document.getElementById('leaveRaidBtn');
 
+const homeTownPromptEl = document.getElementById('homeTownPrompt');
+const homeTownPromptTextEl = document.getElementById('homeTownPromptText');
+const homeTownSetBtn = document.getElementById('homeTownSetBtn');
 const raidPromptEl = document.getElementById('raidPrompt');
 const raidBrowserEl = document.getElementById('raidBrowser');
 const raidRoomListEl = document.getElementById('raidRoomList');
@@ -669,6 +673,12 @@ document.getElementById('npcCloseBtn').addEventListener('click', () => npcPanelE
 document.getElementById('raidCancelBtn').addEventListener('click', () => {
   raidPromptEl.classList.add('hidden');
 });
+homeTownSetBtn.addEventListener('click', () => {
+  ws.send(JSON.stringify({ type: 'set_home_town', townKey: homeTownPromptEl.dataset.townKey }));
+});
+document.getElementById('homeTownCancelBtn').addEventListener('click', () => {
+  homeTownPromptEl.classList.add('hidden');
+});
 document.getElementById('raidBrowserCloseBtn').addEventListener('click', () => {
   raidBrowserEl.classList.add('hidden');
 });
@@ -1134,6 +1144,7 @@ ws.addEventListener('message', ev => {
     leaveRaidBtn.classList.toggle('hidden', !isRaid);
     raidPromptEl.classList.add('hidden');
     raidBrowserEl.classList.add('hidden');
+    homeTownPromptEl.classList.add('hidden');
     resetRoomEntities();
     const self = players.get(selfId);
     if (self) {
@@ -1266,6 +1277,19 @@ ws.addEventListener('message', ev => {
   } else if (msg.type === 'raid_prompt') {
     if (msg.show) { raidPromptEl.classList.remove('hidden'); raidPromptEl.dataset.zoneKey = msg.zoneKey; }
     else raidPromptEl.classList.add('hidden');
+  } else if (msg.type === 'hometown_prompt') {
+    if (msg.show) {
+      homeTownPromptEl.classList.remove('hidden');
+      homeTownPromptEl.dataset.townKey = msg.townKey;
+      homeTownPromptTextEl.textContent = msg.isCurrent ? `${msg.townName}는 이미 홈타운입니다.` : `${msg.townName}를 홈타운으로 설정하시겠습니까?`;
+      homeTownSetBtn.style.display = msg.isCurrent ? 'none' : 'block';
+    } else {
+      homeTownPromptEl.classList.add('hidden');
+    }
+  } else if (msg.type === 'hometown_set') {
+    homeTownReadout.textContent = msg.townName;
+    homeTownPromptEl.classList.add('hidden');
+    showBanner(`홈타운이 ${msg.townName}(으)로 설정되었습니다`);
   } else if (msg.type === 'raid_rooms') {
     raidBrowserEl.classList.remove('hidden');
     raidRoomListEl.innerHTML = '';
@@ -1341,6 +1365,7 @@ ws.addEventListener('message', ev => {
     myIsGuildOwner = !!msg.isGuildOwner;
     hasMap = !!msg.hasMap;
     hasSeenTutorial = !!msg.hasSeenTutorial;
+    homeTownReadout.textContent = msg.homeTownName || '대도시';
     if (msg.hasChosenClass) {
       currentClass = msg.classKey;
       hasChosenClassEver = true;

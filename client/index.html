@@ -111,6 +111,20 @@
   #raidPrompt button:hover { background: #43466a; }
   #raidPrompt .cancel { background: transparent; border-color: #3a3c54; color: #9aa0c0; }
 
+  #homeTownPrompt {
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: min(280px, 92vw); text-align: center;
+  }
+  #homeTownPrompt h3 { margin: 0 0 10px; font-size: 15px; }
+  #homeTownPrompt p { margin: 0 0 12px; font-size: 12px; color: #c8cbe0; }
+  #homeTownPrompt .row { display: flex; flex-direction: column; gap: 8px; }
+  #homeTownPrompt button {
+    padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
+    border: 2px solid #565a80; border-radius: 4px; cursor: pointer;
+  }
+  #homeTownPrompt button:hover { background: #43466a; }
+  #homeTownPrompt .cancel { background: transparent; border-color: #3a3c54; color: #9aa0c0; }
+
   #raidBrowser {
     top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: min(340px, 92vw);
@@ -435,6 +449,15 @@
       </div>
     </div>
 
+    <div id="homeTownPrompt" class="panel hidden">
+      <h3>홈타운 설정</h3>
+      <p id="homeTownPromptText"></p>
+      <div class="row">
+        <button id="homeTownSetBtn">이 도시를 홈타운으로 설정</button>
+        <button id="homeTownCancelBtn" class="cancel">닫기</button>
+      </div>
+    </div>
+
     <div id="raidBrowser" class="panel hidden">
       <h3>레이드 접수처</h3>
       <div id="raidRoomList"></div>
@@ -542,6 +565,7 @@
     <span class="desktop-hint">이동: <b>WASD</b> · 공격: <b>클릭/스페이스</b> · 스킬: <b>E/R</b> · 인벤토리: <b>B</b> · 스텟: <b>C</b> · 지도: <b>M</b> · 채팅: <b>Enter</b> &nbsp;|&nbsp;</span>
     서버: <b id="status">연결 중...</b> &nbsp;|&nbsp;
     구역: <b id="zoneReadout">-</b> &nbsp;|&nbsp;
+    홈타운: <b id="homeTownReadout">대도시</b> &nbsp;|&nbsp;
     직업:<b id="classReadout">-</b> &nbsp;|&nbsp;
     Lv.<b id="levelReadout">1</b> HP:<b id="hpReadout">-</b> EXP:<b id="expReadout">0</b> 골드:<b id="goldReadout">0</b> &nbsp;|&nbsp;
     무기:<b id="weaponReadout">-</b> &nbsp;|&nbsp;
