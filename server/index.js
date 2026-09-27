@@ -57,20 +57,29 @@ const SKILL_DEFS = {
   barrier: { name: '보호막', classKey: 'healer', price: 250, cooldownMs: 12000, desc: '3초간 받는 피해 절반으로 감소' },
   slowField: { name: '저주의 파동', classKey: 'healer', price: 200, cooldownMs: 8000, desc: '주변 몬스터 이동속도 감소' },
 
-  // 특정 닉네임 전용 특수 스킬 — 상점에서 구매 불가, 로그인 시 자동 지급(spawnPlayerForUser)
+  // 특정 계정 전용 특수 스킬 — 상점에서 구매 불가, 로그인 시 자동 지급(spawnPlayerForUser)
   curse523: { name: '523의 저주', classKey: null, price: 0, cooldownMs: 15000, desc: '주변 모든 적에게 저주를 내려 강력한 피해를 입힌다', special: true },
+  relicNogeon: { name: '노건도스의 비보', classKey: null, price: 0, cooldownMs: 14000, desc: '주변 모든 적에게 강력한 피해를 입히고 자신의 체력을 회복한다', special: true },
 };
-const SPECIAL_SKILL_NICKNAME = '마이콜작손';
-const SPECIAL_SKILL_KEY = 'curse523';
+// 조건에 맞는 계정에 자동 지급되는 특수 스킬 목록 — nickname/username 중 지정된 조건을 전부 만족해야 지급됨
+const SPECIAL_SKILLS = [
+  { nickname: '마이콜작손', skillKey: 'curse523' },
+  { username: '궁수급', nickname: '노건', skillKey: 'relicNogeon' },
+];
 // 클래스(재)선택 시 ownedSkills/equippedSkills가 통째로 초기화되므로 그 이후 항상 다시 호출해 보장한다
 function grantSpecialSkill(user) {
-  if (user.nickname !== SPECIAL_SKILL_NICKNAME) return false;
-  if (!user.ownedSkills.includes(SPECIAL_SKILL_KEY)) user.ownedSkills.push(SPECIAL_SKILL_KEY);
-  if (!user.equippedSkills.includes(SPECIAL_SKILL_KEY)) {
-    if (user.equippedSkills[0] == null) user.equippedSkills[0] = SPECIAL_SKILL_KEY;
-    else if (user.equippedSkills[1] == null) user.equippedSkills[1] = SPECIAL_SKILL_KEY;
+  let granted = false;
+  for (const s of SPECIAL_SKILLS) {
+    if (s.nickname && user.nickname !== s.nickname) continue;
+    if (s.username && user.username !== s.username) continue;
+    if (!user.ownedSkills.includes(s.skillKey)) user.ownedSkills.push(s.skillKey);
+    if (!user.equippedSkills.includes(s.skillKey)) {
+      if (user.equippedSkills[0] == null) user.equippedSkills[0] = s.skillKey;
+      else if (user.equippedSkills[1] == null) user.equippedSkills[1] = s.skillKey;
+    }
+    granted = true;
   }
-  return true;
+  return granted;
 }
 function starterSkillFor(classKey) {
   return Object.keys(SKILL_DEFS).find(k => SKILL_DEFS[k].classKey === classKey && SKILL_DEFS[k].price === 0);
@@ -690,21 +699,66 @@ const WEAPON_CATALOG = {
   radiantSword: { name: '레디언트 소드', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
   windBreathSword: { name: '바람의 숨결', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
   masterySword: { name: '마스터리 소드', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
+
+  // 궁수 전용 — 용사 검과 동일한 등급별 스탯, 강철 등급 없이 8종 + 언덕의 전설(바람의 숨결 자리)
+  silverBow: { name: '실버 활', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
+  goldBow: { name: '골드 활', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
+  flameBow: { name: '화염 활', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
+  frostBow: { name: '빙결 활', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
+  diamondBow: { name: '다이아 활', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
+  radiantBow: { name: '레디언트 활', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
+  hillLegendBow: { name: '언덕의 전설 활', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
+  masteryBow: { name: '마스터리 활', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
+
+  // 힐러 전용 — 강철 등급 자리에 레전더리 마법봉, 마스터리 등급 없이 바람의 마법봉이 최고 등급
+  silverWand: { name: '실버 마법봉', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
+  goldWand: { name: '골드 마법봉', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
+  flameWand: { name: '화염 마법봉', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
+  frostWand: { name: '빙결 마법봉', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
+  legendaryWand: { name: '레전더리 마법봉', atkBonus: 4, maxDurability: 50, element: 'none', price: 120 },
+  diamondWand: { name: '다이아 마법봉', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
+  radiantWand: { name: '레디언트 마법봉', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
+  windBreathWand: { name: '바람의 마법봉', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
+};
+// 직업별로 상점에서 살 수 있는 무기 목록 — 용사는 기존 그대로, 궁수/힐러는 각자 전용 무기 계열
+const CLASS_WEAPON_KEYS = {
+  warrior: ['silverSword', 'goldSword', 'flameSword', 'frostSword', 'steelSword', 'diamondSword', 'radiantSword', 'windBreathSword', 'masterySword'],
+  archer: ['silverBow', 'goldBow', 'flameBow', 'frostBow', 'diamondBow', 'radiantBow', 'hillLegendBow', 'masteryBow'],
+  healer: ['silverWand', 'goldWand', 'flameWand', 'frostWand', 'legendaryWand', 'diamondWand', 'radiantWand', 'windBreathWand'],
 };
 const POTION_CATALOG = {
   healthPotion: { name: '체력 물약', heal: 20, price: 15 },
 };
+const DURABILITY_UPGRADE_AMOUNT = 8; // 대장간에서 내구도 강화 시 최대 내구도(+현재 내구도)에 더해지는 양
 const MAP_ITEM_KEY = 'worldMap';
 const MAP_PRICE = 150;
-const SHOP_CATALOG = [
-  ...Object.entries(WEAPON_CATALOG).map(([key, w]) => ({ key, kind: 'weapon', name: w.name, price: w.price, atkBonus: w.atkBonus, maxDurability: w.maxDurability, element: w.element })),
-  ...Object.entries(POTION_CATALOG).map(([key, p]) => ({ key, kind: 'potion', name: p.name, price: p.price, heal: p.heal })),
-  { key: MAP_ITEM_KEY, kind: 'map', name: '세계 지도', price: MAP_PRICE },
-];
+function shopCatalogFor(classKey) {
+  const weaponKeys = CLASS_WEAPON_KEYS[classKey] || CLASS_WEAPON_KEYS.warrior;
+  return [
+    ...weaponKeys.map(key => {
+      const w = WEAPON_CATALOG[key];
+      return { key, kind: 'weapon', name: w.name, price: w.price, atkBonus: w.atkBonus, maxDurability: w.maxDurability, element: w.element };
+    }),
+    ...Object.entries(POTION_CATALOG).map(([key, p]) => ({ key, kind: 'potion', name: p.name, price: p.price, heal: p.heal })),
+    { key: MAP_ITEM_KEY, kind: 'map', name: '세계 지도', price: MAP_PRICE },
+  ];
+}
 
 let nextItemId = 1;
 function makeStarterWeapon() {
   return { id: 'w' + (nextItemId++), kind: 'weapon', key: 'starter', name: '낡은 검', atkBonus: 0, durability: 30, maxDurability: 30, element: 'none', enhanceLevel: 0 };
+}
+
+// 내구도가 0이 되면 무기가 그대로 부서져 사라지고, 맨손 대신 기본 무기(낡은 검)로 교체됨
+function breakWeaponIfDepleted(player) {
+  if (player.weapon.durability > 0) return;
+  const brokenName = player.weapon.name;
+  const starter = makeStarterWeapon();
+  player.weapon = starter;
+  player.user.weapon = starter;
+  saveUsers();
+  sendInventory(player);
+  sendTo(player, { type: 'weapon_broken', brokenName, weapon: starter });
 }
 
 function sendInventory(player) {
@@ -940,7 +994,7 @@ function checkPortals(player, room, now) {
   if (matched.action.type === 'raid_list') {
     sendRaidList(player, matched.action.zoneKey);
   } else if (matched.action.type === 'shop') {
-    sendTo(player, { type: 'shop_open', catalog: SHOP_CATALOG, gold: player.gold, hasMap: !!player.user.hasMap });
+    sendTo(player, { type: 'shop_open', catalog: shopCatalogFor(player.classKey), gold: player.gold, hasMap: !!player.user.hasMap });
   } else if (matched.action.type === 'blacksmith') {
     sendTo(player, { type: 'blacksmith_open', weapon: player.weapon, gold: player.gold });
   } else if (matched.action.type === 'skill_shop') {
@@ -1288,7 +1342,6 @@ function handleMeleeAttack(player, room, now) {
 
     const weapon = weaponUsed;
     let dmg = roll(player.atk + (weapon.atkBonus || 0));
-    if (weapon.durability <= 0) dmg = Math.ceil(dmg / 2);
     if (m.isBoss && weapon.element !== 'none' && weapon.element === m.weakness) {
       dmg = Math.round(dmg * 1.5);
     }
@@ -1300,6 +1353,7 @@ function handleMeleeAttack(player, room, now) {
       type: 'attack_result', hits, totalExp: player.exp, level: player.level,
       weaponDurability: weaponUsed.durability, weaponMaxDurability: weaponUsed.maxDurability,
     });
+    breakWeaponIfDepleted(player);
   }
 }
 
@@ -1307,7 +1361,6 @@ function handleMeleeAttack(player, room, now) {
 function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
   const weapon = player.weapon;
   let dmg = roll(player.atk + (weapon.atkBonus || 0) + (player.magic || 0));
-  if (weapon.durability <= 0) dmg = Math.ceil(dmg / 2);
   if (opts.dmgMult) dmg = Math.round(dmg * opts.dmgMult);
   weapon.durability = Math.max(0, weapon.durability - 1);
   const angle = player.facing + angleOffset;
@@ -1325,6 +1378,7 @@ function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
     ownerId: player.id, classKey: player.classKey, maxLife: proj.maxLife, tag: opts.tag || null,
   });
   sendTo(player, { type: 'attack_result', hits: [], totalExp: player.exp, level: player.level, weaponDurability: weapon.durability, weaponMaxDurability: weapon.maxDurability });
+  breakWeaponIfDepleted(player);
 }
 
 function updateProjectiles(room, dt, now) {
@@ -1411,6 +1465,15 @@ function runSkill(player, room, skillKey, now) {
       if (Math.hypot(m.x - player.x, m.y - player.y) <= radius) applyHitToMonster(room, player, m, roll(player.atk * 5 + 23), now);
     }
     broadcastRoom(room, { type: 'skill_fx', id: player.id, skill: 'curse523', x: player.x, y: player.y, radius });
+  } else if (skillKey === 'relicNogeon') {
+    const radius = 240;
+    for (const m of room.monsters.values()) {
+      if (Math.hypot(m.x - player.x, m.y - player.y) <= radius) applyHitToMonster(room, player, m, roll(player.atk * 4 + 18), now);
+    }
+    const before = player.hp;
+    player.hp = Math.min(player.maxHp, player.hp + 20);
+    if (player.hp !== before) sendTo(player, { type: 'healed', amount: player.hp - before, hp: player.hp, maxHp: player.maxHp });
+    broadcastRoom(room, { type: 'skill_fx', id: player.id, skill: 'relicNogeon', x: player.x, y: player.y, radius });
   }
 }
 
@@ -1749,7 +1812,10 @@ wss.on('connection', ws => {
     } else if (msg.type === 'shop_buy') {
       const wcat = WEAPON_CATALOG[msg.itemKey];
       const pcat = POTION_CATALOG[msg.itemKey];
-      if (wcat) {
+      const allowedWeapon = wcat && (CLASS_WEAPON_KEYS[player.classKey] || CLASS_WEAPON_KEYS.warrior).includes(msg.itemKey);
+      if (wcat && !allowedWeapon) {
+        return;
+      } else if (wcat) {
         if (player.gold < wcat.price) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
         player.gold -= wcat.price;
         player.inventory.push({
@@ -1812,6 +1878,14 @@ wss.on('connection', ws => {
       if (player.gold < cost) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
       player.gold -= cost;
       player.weapon.durability = player.weapon.maxDurability;
+      syncGold(player);
+      sendInventory(player);
+    } else if (msg.type === 'blacksmith_upgrade_durability') {
+      const cost = Math.round(25 + player.weapon.maxDurability * 1.2);
+      if (player.gold < cost) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
+      player.gold -= cost;
+      player.weapon.maxDurability += DURABILITY_UPGRADE_AMOUNT;
+      player.weapon.durability += DURABILITY_UPGRADE_AMOUNT;
       syncGold(player);
       sendInventory(player);
     } else if (msg.type === 'sell_item') {

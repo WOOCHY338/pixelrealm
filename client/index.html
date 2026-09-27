@@ -193,9 +193,9 @@
     background: #23253a; border: 1px solid #3a3c54; border-radius: 6px; padding: 12px; margin-bottom: 12px; font-size: 13px;
   }
   #blacksmithPanel .weapon-card .name { font-weight: bold; margin-bottom: 4px; }
-  #blacksmithPanel .actions { display: flex; gap: 8px; margin-bottom: 10px; }
+  #blacksmithPanel .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
   #blacksmithPanel .actions button {
-    flex: 1; padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
+    flex: 1 1 45%; padding: 10px; font-size: 13px; background: #33354a; color: #e8e9f5;
     border: 2px solid #565a80; border-radius: 4px; cursor: pointer;
   }
   #blacksmithPanel .actions button:disabled { opacity: 0.4; cursor: default; }
@@ -495,6 +495,7 @@
       <div class="actions">
         <button id="blacksmithEnhanceBtn">강화</button>
         <button id="blacksmithRepairBtn">내구도 수리</button>
+        <button id="blacksmithUpgradeDurabilityBtn">내구도 강화</button>
       </div>
       <button class="close" id="blacksmithCloseBtn">닫기</button>
     </div>

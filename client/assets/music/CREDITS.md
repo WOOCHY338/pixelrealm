@@ -15,3 +15,6 @@ CC0는 저작자 표시 없이 자유롭게 사용할 수 있지만, 제작자�
 | field6.ogg | 불타는 사막 | Desert theme | yd | https://opengameart.org/content/desert-theme |
 | field7.mp3 | 잊혀진 폐허 | Village Ruins | isaiah658 | https://opengameart.org/content/village-ruins |
 | raid.mp3 | 레이드 전투 | Battle Theme A | cynicmusic | https://opengameart.org/content/battle-theme-a |
+| village.ogg | 마을 | Mystical RPG Maker Town Theme | symphony | https://opengameart.org/content/mystical-rpg-maker-town-theme |
+| greenforest.ogg | 그린 숲 | Forest Whisper Theme | Cleyton Kauffman | https://opengameart.org/content/forest-whisper-theme |
+| watertemple.ogg | 물의 신전 | Underwater Theme II | Cleyton Kauffman | https://opengameart.org/content/underwater-theme-ii |

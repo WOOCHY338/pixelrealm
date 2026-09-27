@@ -40,6 +40,7 @@ const blacksmithWeaponNameEl = document.getElementById('blacksmithWeaponName');
 const blacksmithWeaponStatEl = document.getElementById('blacksmithWeaponStat');
 const blacksmithEnhanceBtn = document.getElementById('blacksmithEnhanceBtn');
 const blacksmithRepairBtn = document.getElementById('blacksmithRepairBtn');
+const blacksmithUpgradeDurabilityBtn = document.getElementById('blacksmithUpgradeDurabilityBtn');
 const inventoryPanelEl = document.getElementById('inventoryPanel');
 const invListEl = document.getElementById('invList');
 const invGoldEl = document.getElementById('invGold');
@@ -175,6 +176,7 @@ const SKILL_DEFS = {
   barrier: { name: '보호막', classKey: 'healer', price: 250, desc: '3초간 받는 피해 절반으로 감소' },
   slowField: { name: '저주의 파동', classKey: 'healer', price: 200, desc: '주변 몬스터 이동속도 감소' },
   curse523: { name: '523의 저주', classKey: null, price: 0, desc: '주변 모든 적에게 저주를 내려 강력한 피해를 입힌다' },
+  relicNogeon: { name: '노건도스의 비보', classKey: null, price: 0, desc: '주변 모든 적에게 강력한 피해를 입히고 자신의 체력을 회복한다' },
 };
 const STAT_LABELS = { hp: '체력', speed: '속도', dmg: '대미지', magic: '마력' };
 let classSelected = false;
@@ -301,6 +303,9 @@ const MUSIC_FILES = {
   field5: 'assets/music/field5.mp3',
   field6: 'assets/music/field6.ogg',
   field7: 'assets/music/field7.mp3',
+  village: 'assets/music/village.ogg',
+  greenforest: 'assets/music/greenforest.ogg',
+  watertemple: 'assets/music/watertemple.ogg',
   raid: 'assets/music/raid.mp3',
 };
 const MUSIC_VOLUME = 0.32;
@@ -748,6 +753,7 @@ document.getElementById('shopCloseBtn').addEventListener('click', () => shopPane
 document.getElementById('blacksmithCloseBtn').addEventListener('click', () => blacksmithPanelEl.classList.add('hidden'));
 blacksmithEnhanceBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'blacksmith_enhance' })));
 blacksmithRepairBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'blacksmith_repair' })));
+blacksmithUpgradeDurabilityBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'blacksmith_upgrade_durability' })));
 
 let lastShopCatalog = null;
 
@@ -807,10 +813,13 @@ function renderBlacksmithPanel(weapon, gold) {
   blacksmithWeaponStatEl.textContent = `내구도 ${weapon.durability} / ${weapon.maxDurability}`;
   const enhanceCost = 30 + (weapon.enhanceLevel || 0) * 20;
   const repairCost = (weapon.maxDurability - weapon.durability) * 2;
+  const durabilityUpgradeCost = Math.round(25 + weapon.maxDurability * 1.2);
   blacksmithEnhanceBtn.textContent = `강화 (${enhanceCost}G)`;
   blacksmithEnhanceBtn.disabled = gold < enhanceCost;
   blacksmithRepairBtn.textContent = repairCost > 0 ? `내구도 수리 (${repairCost}G)` : '내구도 최대';
   blacksmithRepairBtn.disabled = repairCost <= 0 || gold < repairCost;
+  blacksmithUpgradeDurabilityBtn.textContent = `내구도 강화 +8 (${durabilityUpgradeCost}G)`;
+  blacksmithUpgradeDurabilityBtn.disabled = gold < durabilityUpgradeCost;
 }
 
 function renderStatPanel() {
@@ -1317,6 +1326,8 @@ ws.addEventListener('message', ev => {
     showBanner('레이드 시작!');
   } else if (msg.type === 'raid_win') {
     showBanner(`${msg.bossName} 처치! +${msg.exp} EXP · +${msg.goldGain}G · ${msg.materialName} 획득`);
+  } else if (msg.type === 'weapon_broken') {
+    showBanner(`${msg.brokenName}이(가) 내구도 소진으로 부서졌습니다 — ${msg.weapon.name}(으)로 교체됨`);
   } else if (msg.type === 'inventory') {
     selfGold = msg.gold;
     selfWeapon = msg.weapon;
@@ -2071,10 +2082,35 @@ const WEAPON_VISUALS = {
   radiantSword:    { len: 23, width: 4.2, blade: '#fff2b8', edge: '#ffffff', hilt: '#6a5a2a', glow: 'rgba(255,235,160,0.6)' },
   windBreathSword: { len: 25, width: 4.2, blade: '#9ef2c8', edge: '#eafff2', hilt: '#2c4a3a', glow: 'rgba(140,255,200,0.5)', wispy: true },
   masterySword:    { len: 28, width: 4.6, blade: '#3a1a5e', edge: '#ff6ad5', hilt: '#1a0a2a', glow: 'rgba(255,90,220,0.55)', sparkle: true },
+
+  // 궁수 전용 — 활(호(弧) 모양 + 시위)
+  silverBow:     { shape: 'bow', len: 26, width: 2.6, blade: '#c7ced8', edge: '#eef2f7', hilt: '#4a4a52' },
+  goldBow:       { shape: 'bow', len: 28, width: 2.8, blade: '#e0c258', edge: '#fff0b0', hilt: '#5a4420' },
+  flameBow:      { shape: 'bow', len: 27, width: 2.8, blade: '#e0542f', edge: '#ffcf94', hilt: '#3a2418', glow: 'rgba(255,110,40,0.5)' },
+  frostBow:      { shape: 'bow', len: 27, width: 2.8, blade: '#7fd0ec', edge: '#e4f8ff', hilt: '#26333a', glow: 'rgba(120,210,255,0.5)' },
+  diamondBow:    { shape: 'bow', len: 31, width: 3.0, blade: '#bfe9f5', edge: '#ffffff', hilt: '#33424a', glow: 'rgba(180,235,255,0.45)' },
+  radiantBow:    { shape: 'bow', len: 33, width: 3.2, blade: '#fff2b8', edge: '#ffffff', hilt: '#6a5a2a', glow: 'rgba(255,235,160,0.6)' },
+  hillLegendBow: { shape: 'bow', len: 35, width: 3.2, blade: '#9ef2c8', edge: '#eafff2', hilt: '#2c4a3a', glow: 'rgba(140,255,200,0.5)', wispy: true },
+  masteryBow:    { shape: 'bow', len: 38, width: 3.6, blade: '#3a1a5e', edge: '#ff6ad5', hilt: '#1a0a2a', glow: 'rgba(255,90,220,0.55)', sparkle: true },
+
+  // 힐러 전용 — 마법봉(짧은 지팡이 + 발광 보주)
+  silverWand:      { shape: 'wand', len: 19, width: 3.4, blade: '#c7ced8', edge: '#eef2f7', hilt: '#4a4a52' },
+  goldWand:        { shape: 'wand', len: 20, width: 3.6, blade: '#e0c258', edge: '#fff0b0', hilt: '#5a4420' },
+  flameWand:       { shape: 'wand', len: 19, width: 3.6, blade: '#e0542f', edge: '#ffcf94', hilt: '#3a2418', glow: 'rgba(255,110,40,0.5)' },
+  frostWand:       { shape: 'wand', len: 19, width: 3.6, blade: '#7fd0ec', edge: '#e4f8ff', hilt: '#26333a', glow: 'rgba(120,210,255,0.5)' },
+  legendaryWand:   { shape: 'wand', len: 22, width: 3.8, blade: '#8a97a8', edge: '#e4eaf2', hilt: '#2e2e34' },
+  diamondWand:     { shape: 'wand', len: 23, width: 4.0, blade: '#bfe9f5', edge: '#ffffff', hilt: '#33424a', glow: 'rgba(180,235,255,0.45)' },
+  radiantWand:     { shape: 'wand', len: 25, width: 4.2, blade: '#fff2b8', edge: '#ffffff', hilt: '#6a5a2a', glow: 'rgba(255,235,160,0.6)' },
+  windBreathWand:  { shape: 'wand', len: 27, width: 4.2, blade: '#9ef2c8', edge: '#eafff2', hilt: '#2c4a3a', glow: 'rgba(140,255,200,0.5)', wispy: true },
 };
 function drawWeaponInHand(weaponKey) {
-  const now = performance.now();
   const wv = WEAPON_VISUALS[weaponKey] || WEAPON_VISUALS.starter;
+  if (wv.shape === 'bow') return drawBowInHand(wv);
+  if (wv.shape === 'wand') return drawWandInHand(wv);
+  drawSwordInHand(wv);
+}
+function drawSwordInHand(wv) {
+  const now = performance.now();
   const baseX = 9;
   const tipX = baseX + wv.len;
 
@@ -2121,6 +2157,100 @@ function drawWeaponInHand(weaponKey) {
       ctx.beginPath();
       ctx.moveTo(baseX + wv.len * 0.4, off - 2 - i * 3);
       ctx.lineTo(baseX + wv.len * 0.75, off + 2 - i * 3);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawBowInHand(wv) {
+  const now = performance.now();
+  const cx = 9 + wv.len * 0.28;
+  const r = wv.len * 0.55;
+  const startAng = -1.15, endAng = 1.15;
+
+  if (wv.glow) {
+    ctx.fillStyle = wv.glow;
+    ctx.beginPath();
+    ctx.arc(cx, 0, r * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = wv.blade;
+  ctx.lineWidth = wv.width;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, 0, r, startAng, endAng);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  const topX = cx + Math.cos(startAng) * r, topY = Math.sin(startAng) * r;
+  const botX = cx + Math.cos(endAng) * r, botY = Math.sin(endAng) * r;
+  ctx.strokeStyle = wv.edge;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(topX, topY);
+  ctx.lineTo(9, 0);
+  ctx.lineTo(botX, botY);
+  ctx.stroke();
+
+  if (wv.sparkle) {
+    const s = 0.5 + 0.5 * Math.sin(now / 130);
+    ctx.fillStyle = `rgba(255,255,255,${0.4 + s * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(cx + r * 0.6, -r * 0.5, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (wv.wispy) {
+    ctx.strokeStyle = 'rgba(200,255,225,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 2; i++) {
+      const off = Math.sin(now / 150 + i * 2) * 3;
+      ctx.beginPath();
+      ctx.moveTo(cx + r * 0.2, off - 2 - i * 3);
+      ctx.lineTo(cx + r * 0.5, off + 2 - i * 3);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawWandInHand(wv) {
+  const now = performance.now();
+  const baseX = 9;
+  const tipX = baseX + wv.len * 0.68;
+
+  if (wv.glow) {
+    ctx.fillStyle = wv.glow;
+    ctx.beginPath();
+    ctx.arc(tipX, 0, wv.width * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = wv.hilt;
+  ctx.fillRect(baseX - 3, -1.4, tipX - baseX + 3, 2.8);
+
+  ctx.fillStyle = wv.blade;
+  ctx.beginPath();
+  ctx.arc(tipX, 0, wv.width, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = wv.edge;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  if (wv.sparkle) {
+    const s = 0.5 + 0.5 * Math.sin(now / 130);
+    ctx.fillStyle = `rgba(255,255,255,${0.4 + s * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(tipX, -wv.width * 1.4, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (wv.wispy) {
+    ctx.strokeStyle = 'rgba(200,255,225,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 2; i++) {
+      const off = Math.sin(now / 150 + i * 2) * 3;
+      ctx.beginPath();
+      ctx.moveTo(tipX - wv.width, off - 2 - i * 3);
+      ctx.lineTo(tipX + wv.width, off + 2 - i * 3);
       ctx.stroke();
     }
   }
@@ -2569,6 +2699,50 @@ function drawSkillFx(now) {
         ctx.strokeText('523', 0, 0);
         ctx.fillStyle = `rgba(224, 130, 255, ${textAlpha})`;
         ctx.fillText('523', 0, 0);
+      }
+      ctx.restore();
+    } else if (fx.skill === 'relicNogeon') {
+      const DUR = 650;
+      if (age > DUR) { skillFx.splice(i, 1); continue; }
+      const t = age / DUR;
+      const r = (fx.radius || 240) * Math.min(1, t * 1.4);
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 210, 80, ${0.26 * (1 - t)})`;
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 235, 150, ${0.9 * (1 - t)})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      const rays = 10;
+      for (let s = 0; s < rays; s++) {
+        const ang = (s / rays) * Math.PI * 2 - t * 1.6;
+        const inner = r * 0.45, outer = r * (1 + 0.12 * Math.sin(t * 18 + s));
+        ctx.strokeStyle = `rgba(255, 244, 200, ${0.7 * (1 - t)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(fx.x + Math.cos(ang) * inner, fx.y + Math.sin(ang) * inner);
+        ctx.lineTo(fx.x + Math.cos(ang) * outer, fx.y + Math.sin(ang) * outer);
+        ctx.stroke();
+      }
+      const textDur = 550;
+      if (age <= textDur) {
+        const tt = age / textDur;
+        const popIn = Math.min(1, tt / 0.22);
+        const scale = 0.5 + popIn * 0.9 - (tt > 0.7 ? (tt - 0.7) / 0.3 * 0.25 : 0);
+        const textAlpha = tt < 0.72 ? 1 : Math.max(0, 1 - (tt - 0.72) / 0.28);
+        ctx.translate(fx.x, fx.y - 44);
+        ctx.scale(scale, scale);
+        ctx.font = 'bold 40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = `rgba(60, 40, 0, ${textAlpha})`;
+        ctx.strokeText('비보', 0, 0);
+        ctx.fillStyle = `rgba(255, 226, 140, ${textAlpha})`;
+        ctx.fillText('비보', 0, 0);
       }
       ctx.restore();
     } else {
