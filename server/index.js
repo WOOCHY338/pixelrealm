@@ -67,6 +67,8 @@ const SPECIAL_SKILLS = [
   { username: '궁수급', nickname: '노건', skillKey: 'relicNogeon' },
 ];
 // 클래스(재)선택 시 ownedSkills/equippedSkills가 통째로 초기화되므로 그 이후 항상 다시 호출해 보장한다
+// 두 스킬 슬롯이 이미 다 차 있어도(기존 계정이 스킬 상점에서 이미 2개를 장착해둔 경우) 슬롯1을 덮어써서라도 항상 장착되게 함 —
+// 그렇지 않으면 ownedSkills에만 조용히 추가되고 실제로는 쓸 수 없는 채로 남는 버그가 있었음
 function grantSpecialSkill(user) {
   let granted = false;
   for (const s of SPECIAL_SKILLS) {
@@ -76,6 +78,7 @@ function grantSpecialSkill(user) {
     if (!user.equippedSkills.includes(s.skillKey)) {
       if (user.equippedSkills[0] == null) user.equippedSkills[0] = s.skillKey;
       else if (user.equippedSkills[1] == null) user.equippedSkills[1] = s.skillKey;
+      else user.equippedSkills[1] = s.skillKey;
     }
     granted = true;
   }
