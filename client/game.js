@@ -212,6 +212,7 @@ let currentZoneKey = 'capital';
 let currentZoneName = '대도시';
 let isRaid = false;
 let TICK_MS = 1000 / 30;
+let lastStateAt = 0;
 const TILE = 32;
 const PLAYER_R = 14;
 const MONSTER_R = 12;
@@ -300,7 +301,7 @@ const MUSIC_FILES = {
   frontier: 'assets/music/frontier.mp3',
   field1: 'assets/music/field1.ogg',
   field2: 'assets/music/field2.mp3',
-  field3: 'assets/music/field3.wav',
+  field3: 'assets/music/field3.ogg',
   field4: 'assets/music/field4.ogg',
   field5: 'assets/music/field5.mp3',
   field6: 'assets/music/field6.ogg',
@@ -1172,6 +1173,9 @@ ws.addEventListener('message', ev => {
     }
   } else if (msg.type === 'state') {
     const now = performance.now();
+    // 스냅샷 간격이 방마다 다름(오픈월드 15Hz, 레이드 30Hz) — 실제 도착 간격으로 보간 시간을 맞춤
+    if (lastStateAt) TICK_MS = Math.max(20, Math.min(120, TICK_MS * 0.85 + (now - lastStateAt) * 0.15));
+    lastStateAt = now;
     const seen = new Set();
     for (const p of msg.players) {
       seen.add(p.id);
