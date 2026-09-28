@@ -316,10 +316,18 @@
   #authOverlay {
     position: fixed; inset: 0; z-index: 60;
     background: rgba(8, 9, 15, 0.96);
-    display: flex; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px; box-sizing: border-box; overflow-y: auto;
     color: #e8e9f5;
   }
   #authOverlay.hidden { display: none; }
+  #authGameTitle { margin: auto 0 4px; font-size: 34px; letter-spacing: 2px; color: #ffd66b; text-shadow: 3px 3px 0 #6a3f12; text-align: center; }
+  #authGameSub { margin: 0 0 16px; font-size: 12px; color: #9aa0c0; text-align: center; }
+  #patchNotes { width: min(300px, 92vw); margin: 12px 0 auto; background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 14px 16px; box-sizing: border-box; max-height: 220px; overflow-y: auto; font-size: 12px; line-height: 1.5; scrollbar-color: #565a80 #1a1c2a; }
+  #patchNotes h3 { margin: 0 0 8px; font-size: 14px; color: #ffd66b; }
+  #patchNotes h4 { margin: 10px 0 2px; font-size: 12px; color: #8fd6ff; }
+  #patchNotes h4:first-of-type { margin-top: 0; }
+  #patchNotes ul { margin: 0; padding-left: 16px; color: #c8cbe0; }
   #authBox { width: min(300px, 92vw); background: #1a1c2a; border: 2px solid #3a3c54; border-radius: 10px; padding: 24px; box-sizing: border-box; }
   #authBox h2 { margin: 0 0 16px; font-size: 18px; text-align: center; }
   #authBox input {
@@ -388,6 +396,8 @@
     </div>
   </div>
   <div id="authOverlay">
+    <h1 id="authGameTitle">PixelRealm</h1>
+    <p id="authGameSub">픽셀 오픈월드 MMORPG · v3.5</p>
     <div id="authBox">
       <h2 id="authTitle">로그인</h2>
       <div id="authError"></div>
@@ -400,6 +410,30 @@
       <div class="row">
         <button id="authSwitchBtn">계정이 없으신가요? 회원가입</button>
       </div>
+    </div>
+    <div id="patchNotes">
+      <h3>패치노트</h3>
+      <h4>v3.5</h4>
+      <ul>
+        <li>레벨업 필요 경험치 상향 — 레벨이 오를수록 훨씬 많은 경험치가 필요합니다</li>
+      </ul>
+      <h4>v3.4</h4>
+      <ul>
+        <li>대장간에 내구도 강화 추가</li>
+        <li>내구도가 0이 되면 무기가 파괴되고 낡은 검으로 교체</li>
+        <li>직업별 상점 — 궁수는 활, 힐러는 마법봉 전용 무기</li>
+        <li>마을·그린 숲·물의 신전 배경음악 추가</li>
+        <li>특수 스킬 추가 및 지급 버그 수정</li>
+      </ul>
+      <h4>v3.3</h4>
+      <ul>
+        <li>홈타운 설정 기능 추가</li>
+        <li>신규 필드-도시 성문 누락 수정</li>
+      </ul>
+      <h4>v3.2</h4>
+      <ul>
+        <li>마을·그린 숲·물의 신전에 몬스터·정예·레이드 보스 추가</li>
+      </ul>
     </div>
   </div>
   <div id="classSelectOverlay" class="hidden">
