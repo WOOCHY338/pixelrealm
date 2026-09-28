@@ -98,6 +98,26 @@ for (const u of users.values()) u.online = false;
 function saveUsers() {
   db.saveUsers(users);
 }
+
+// v3.5 레벨 초기화 — 필요 경험치 공식이 바뀌면서 기존 계정을 모두 레벨 1로 되돌린다.
+// 그동안 레벨업으로 얻은 스텟(찍은 능력치 + 남은 포인트)은 그대로 두고, 보상으로 스텟 포인트 30개를 추가 지급.
+// 전용 컬럼이 없어서 완료 표시는 quests(jsonb)에 남긴다 — QUEST_DEFS에 없는 키라 퀘스트 로직은 무시함.
+const LEVEL_RESET_V35 = '_levelResetV35';
+const LEVEL_RESET_V35_BONUS = 30;
+{
+  let resetCount = 0;
+  for (const u of users.values()) {
+    if (!u.quests) u.quests = {};
+    if (u.quests[LEVEL_RESET_V35]) continue;
+    console.log(`[v3.5 레벨 초기화] ${u.username}(${u.nickname}) Lv.${u.level} EXP ${u.exp} 스텟포인트 ${u.statPoints || 0} → Lv.1, 스텟포인트 +${LEVEL_RESET_V35_BONUS}`);
+    u.level = 1;
+    u.exp = 0;
+    u.statPoints = (u.statPoints || 0) + LEVEL_RESET_V35_BONUS;
+    u.quests[LEVEL_RESET_V35] = true;
+    resetCount++;
+  }
+  if (resetCount) { saveUsers(); console.log(`[v3.5 레벨 초기화] ${resetCount}개 계정 처리 완료`); }
+}
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
@@ -111,6 +131,7 @@ function makeNewUser(username, password, nickname) {
     weapon: makeStarterWeapon(), inventory: [],
     ownedSkills: [], equippedSkills: [null, null],
     guildId: null, hasMap: false, hasSeenTutorial: false,
+    quests: { [LEVEL_RESET_V35]: true }, // 신규 계정은 v3.5 레벨 초기화 대상이 아님
   };
 }
 
