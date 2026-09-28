@@ -186,6 +186,7 @@ let equippedSkills = [null, null];
 let ownedSkills = [];
 let myStats = { hp: 0, speed: 0, dmg: 0, magic: 0 };
 let myStatPoints = 0;
+let myLevelResetV35 = null; // v3.5 레벨 초기화 전 기록(서버가 계정에 보관)
 let myGuild = null; // { id, name, approvalRequired, memberCount, ownerUsername } | null
 let myIsGuildOwner = false;
 let myUsername = null;
@@ -243,6 +244,7 @@ let selfId = null;
 let selfExp = 0;
 const players = new Map();
 const monsters = new Map();
+let hazards = []; // 레이드 보스 공격 위험 지대 — 서버 스냅샷 그대로 그림
 const floatingTexts = [];
 const impacts = [];
 const sparks = [];
@@ -824,6 +826,12 @@ function renderBlacksmithPanel(weapon, gold) {
 
 function renderStatPanel() {
   statPointsInfo.textContent = `남은 포인트: ${myStatPoints}`;
+  if (myLevelResetV35) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:#9aa0c0;margin-top:4px;';
+    note.textContent = `v3.5 초기화 전 기록: Lv.${myLevelResetV35.level} · EXP ${myLevelResetV35.exp} · 남은 포인트 ${myLevelResetV35.statPoints}`;
+    statPointsInfo.appendChild(note);
+  }
   statRowsEl.innerHTML = '';
   for (const stat of ['hp', 'speed', 'dmg', 'magic']) {
     const row = document.createElement('div');
@@ -1219,12 +1227,14 @@ ws.addEventListener('message', ev => {
       entry.hp = m.hp;
       entry.maxHp = m.maxHp;
       entry.phase = m.phase;
+      entry.enraged = !!m.enraged;
       entry.isElite = m.isElite;
       entry.recvTime = now;
     }
     for (const id of [...monsters.keys()]) {
       if (!seenM.has(id)) monsters.delete(id);
     }
+    hazards = msg.hazards || [];
   } else if (msg.type === 'attack_result') {
     let anyKill = false;
     for (const hit of msg.hits) {
@@ -1324,6 +1334,11 @@ ws.addEventListener('message', ev => {
   } else if (msg.type === 'raid_started') {
     raidLobbyPanelEl.classList.add('hidden');
     showBanner('레이드 시작!');
+  } else if (msg.type === 'boss_cast') {
+    const m = monsters.get(msg.id);
+    spawnFloatText(m?.renderX ?? msg.x, (m?.renderY ?? msg.y) - 46, msg.text, '#ffb0a0', 1.2);
+  } else if (msg.type === 'boss_enrage') {
+    showBanner(`${msg.name}이(가) 분노했습니다! 패턴이 강해집니다`);
   } else if (msg.type === 'raid_win') {
     showBanner(`${msg.bossName} 처치! +${msg.exp} EXP · +${msg.goldGain}G · ${msg.materialName} 획득`);
   } else if (msg.type === 'weapon_broken') {
@@ -1367,6 +1382,7 @@ ws.addEventListener('message', ev => {
     authOverlay.classList.add('hidden');
     myStatPoints = msg.statPoints || 0;
     myStats = msg.stats || { hp: 0, speed: 0, dmg: 0, magic: 0 };
+    myLevelResetV35 = msg.levelResetV35 || null;
     ownedSkills = msg.ownedSkills || [];
     equippedSkills = msg.equippedSkills || [null, null];
     selfGold = msg.gold || 0;
@@ -2477,6 +2493,63 @@ function drawSparks(now) {
   }
 }
 
+// ── 레이드 보스 위험 지대 — 예고(옅은 색, 안쪽이 점점 채워짐) → 발동(진한 색). 작은 원은 보스 탄환 ──
+function hexToRgb(hex) {
+  const n = parseInt((hex || '#ff5a5a').slice(1), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+function hazardPath(h, scale) {
+  ctx.beginPath();
+  if (h.s === 'c') {
+    ctx.arc(h.x, h.y, Math.max(0.1, h.r * scale), 0, Math.PI * 2);
+  } else if (h.s === 'r') {
+    const inner = h.r2, outer = h.r2 + (h.r - h.r2) * scale;
+    ctx.arc(h.x, h.y, Math.max(inner + 0.1, outer), 0, Math.PI * 2);
+    if (inner > 0) ctx.arc(h.x, h.y, inner, 0, Math.PI * 2, true);
+  } else if (h.s === 'l') {
+    const c = Math.cos(h.a), s = Math.sin(h.a), hw = h.w / 2 * scale;
+    ctx.moveTo(h.x - s * hw, h.y + c * hw);
+    ctx.lineTo(h.x + c * h.l - s * hw, h.y + s * h.l + c * hw);
+    ctx.lineTo(h.x + c * h.l + s * hw, h.y + s * h.l - c * hw);
+    ctx.lineTo(h.x + s * hw, h.y - c * hw);
+    ctx.closePath();
+  }
+}
+function drawHazards(now) {
+  for (const h of hazards) {
+    const rgb = hexToRgb(h.c);
+    if (h.s === 'c' && h.r <= 14 && h.on) {
+      // 보스 탄환
+      ctx.fillStyle = `rgba(${rgb}, 0.35)`;
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r + 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgb(${rgb})`;
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.arc(h.x - h.r * 0.3, h.y - h.r * 0.3, h.r * 0.35, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    if (h.on) {
+      const flicker = 0.5 + 0.5 * Math.sin(now / 50);
+      hazardPath(h, 1);
+      ctx.fillStyle = `rgba(${rgb}, ${0.45 + flicker * 0.15})`;
+      ctx.fill('evenodd');
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else {
+      hazardPath(h, 1);
+      ctx.fillStyle = `rgba(${rgb}, 0.1)`;
+      ctx.fill('evenodd');
+      ctx.strokeStyle = `rgba(255, 70, 70, ${0.45 + 0.35 * h.f})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      hazardPath(h, h.f);
+      ctx.fillStyle = `rgba(255, 70, 70, ${0.12 + 0.2 * h.f})`;
+      ctx.fill('evenodd');
+    }
+  }
+}
+
 // ── 원거리 공격 투사체(화살/마법탄) — 서버가 준 시작 속도로 클라이언트가 직접 시뮬레이션(도형으로 표현) ──
 const PROJECTILE_TINTS = {
   multi: { glow: 'rgba(126, 224, 120, 0.4)', shaft: '#8fd67e', head: '#d8f5c8' },
@@ -2999,6 +3072,7 @@ function loop(now) {
   drawLandmarks(now);
   for (const ob of obstacles) drawObstacle(ob);
   drawWalls();
+  drawHazards(now);
   for (const m of monsters.values()) {
     if (m.renderX == null) continue;
     const flashing = m.flashUntil && now < m.flashUntil;
@@ -3011,6 +3085,13 @@ function loop(now) {
         squashX = 1 + wobble * 0.28;
         squashY = 1 - wobble * 0.28;
       }
+    }
+    if (m.isBoss && m.enraged) {
+      const pulse = 0.5 + 0.5 * Math.sin(now / 120);
+      ctx.fillStyle = `rgba(255, 40, 40, ${0.12 + pulse * 0.12})`;
+      ctx.beginPath();
+      ctx.arc(m.renderX, m.renderY, MONSTER_R * 1.9 + 16 + pulse * 4, 0, Math.PI * 2);
+      ctx.fill();
     }
     drawMonster(m.renderX, m.renderY, m.kind, m.hp, m.maxHp, flashing, squashX, squashY, m.isBoss, m.phase, now, m.isElite);
   }
