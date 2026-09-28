@@ -166,7 +166,8 @@ function recomputeDerivedStats(player) {
 }
 
 // ── 레벨업 ──────────────────────────────────────────────
-function requiredExp(level) { return 20 + (level - 1) * 15; }
+// 1→2: 40, 5→6: 525, 10→11: 1592 — 레벨이 오를수록 가파르게 증가
+function requiredExp(level) { return Math.round(40 * Math.pow(level, 1.6)); }
 
 function applyLevelUps(player) {
   const startLevel = player.level;
