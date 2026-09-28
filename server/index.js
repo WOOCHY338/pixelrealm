@@ -101,22 +101,96 @@ function saveUsers() {
 
 // v3.5 레벨 초기화 — 필요 경험치 공식이 바뀌면서 기존 계정을 모두 레벨 1로 되돌린다.
 // 그동안 레벨업으로 얻은 스텟(찍은 능력치 + 남은 포인트)은 그대로 두고, 보상으로 스텟 포인트 30개를 추가 지급.
-// 전용 컬럼이 없어서 완료 표시는 quests(jsonb)에 남긴다 — QUEST_DEFS에 없는 키라 퀘스트 로직은 무시함.
+// 전용 컬럼이 없어서 기록은 quests(jsonb)에 남긴다 — QUEST_DEFS에 없는 키라 퀘스트 로직은 무시함.
+// 값은 초기화 전 기록 { level, exp, statPoints, at } (신규 계정은 true — 초기화 대상 아님)
 const LEVEL_RESET_V35 = '_levelResetV35';
 const LEVEL_RESET_V35_BONUS = 30;
+const LEVEL_RESET_V35_AT = '2026-09-28';
+// 첫 배포 때 기록 없이 true로만 표시된 26개 계정 — 당시 서버 로그에서 복구한 초기화 전 [레벨, EXP, 스텟포인트].
+// 저장소가 공개라 아이디 대신 해시로 보관
+const LEVEL_RESET_V35_LOG = {
+  "56d6a2c1dd112cc2": [1, 0, 0],
+  "91b65d256b328c93": [11, 30, 10],
+  "5b0f6937d3fa09c7": [20, 144, 5],
+  "6e4678285a8166ff": [1, 0, 0],
+  "ce4893b73f1ee80d": [2, 8, 1],
+  "b6ecae820b3c4759": [7, 34, 3],
+  "55ff3618c7253bb9": [38, 775, 0],
+  "fa5f94cb9eca528a": [1, 0, 0],
+  "52460e74b34f4a82": [10, 127, 0],
+  "cdba7344f0300e91": [1, 0, 0],
+  "2f5c640f08689e75": [1, 12, 0],
+  "47b062962ffc93f2": [1, 10, 0],
+  "a1c5fa4dccf99ea9": [4, 15, 3],
+  "cdc93d234bb71569": [17, 24, 2],
+  "630b8f0607285f92": [27, 160, 0],
+  "ee4b5a0fa2b51fc3": [1, 0, 0],
+  "bbc7a7809f486a15": [1, 0, 0],
+  "11781cf973423020": [4, 25, 0],
+  "945699da5940401e": [28, 185, 4],
+  "ccaf6203d0eca9f7": [4, 1, 3],
+  "9cf778ad0c1dd19d": [1, 0, 0],
+  "d4ce4dd3e5420bff": [1, 0, 0],
+  "98677d7f6c349102": [1, 0, 0],
+  "d6dafccbe2df26c3": [3, 45, 2],
+  "ab47e8e8d39cc92f": [1, 0, 0],
+  "51a93eb334e97750": [9, 82, 8],
+};
+function levelResetV35Key(username) {
+  return crypto.createHash('sha256').update('pixelrealm-v35:' + username).digest('hex').slice(0, 16);
+}
 {
-  let resetCount = 0;
+  let resetCount = 0, restoredCount = 0;
   for (const u of users.values()) {
     if (!u.quests) u.quests = {};
-    if (u.quests[LEVEL_RESET_V35]) continue;
+    const mark = u.quests[LEVEL_RESET_V35];
+    if (mark === true) {
+      const rec = LEVEL_RESET_V35_LOG[levelResetV35Key(u.username)];
+      if (rec) {
+        u.quests[LEVEL_RESET_V35] = { level: rec[0], exp: rec[1], statPoints: rec[2], at: LEVEL_RESET_V35_AT };
+        restoredCount++;
+      }
+      continue;
+    }
+    if (mark) continue;
     console.log(`[v3.5 레벨 초기화] ${u.username}(${u.nickname}) Lv.${u.level} EXP ${u.exp} 스텟포인트 ${u.statPoints || 0} → Lv.1, 스텟포인트 +${LEVEL_RESET_V35_BONUS}`);
+    u.quests[LEVEL_RESET_V35] = { level: u.level, exp: u.exp, statPoints: u.statPoints || 0, at: LEVEL_RESET_V35_AT };
     u.level = 1;
     u.exp = 0;
     u.statPoints = (u.statPoints || 0) + LEVEL_RESET_V35_BONUS;
-    u.quests[LEVEL_RESET_V35] = true;
     resetCount++;
   }
-  if (resetCount) { saveUsers(); console.log(`[v3.5 레벨 초기화] ${resetCount}개 계정 처리 완료`); }
+  if (resetCount || restoredCount) {
+    saveUsers();
+    // 무중단 배포 중엔 이전 서버가 종료되면서 옛 데이터로 전체 저장을 덮어쓸 수 있음 — 이전 서버가 내려간 뒤 한 번 더 저장
+    setTimeout(saveUsers, 30000);
+    setTimeout(saveUsers, 90000);
+    console.log(`[v3.5 레벨 초기화] 초기화 ${resetCount}개, 기록 복구 ${restoredCount}개 계정 처리 완료`);
+  }
+}
+// 운영자 요청 — 특정 계정의 속도 스텟을 0으로 되돌리고, 찍었던 만큼 스텟 포인트로 환급(계정당 한 번).
+// 기록 { speed, at }은 quests._speedReset에 남김. 공개 저장소라 아이디는 해시로 지정
+const SPEED_RESET_KEY = '_speedReset';
+const SPEED_RESET_TARGETS = new Set(['ace5870f96704d6f']);
+{
+  let count = 0;
+  for (const u of users.values()) {
+    if (!u.stats || (u.quests && u.quests[SPEED_RESET_KEY])) continue;
+    const key = crypto.createHash('sha256').update('pixelrealm-speedreset:' + u.username).digest('hex').slice(0, 16);
+    if (!SPEED_RESET_TARGETS.has(key)) continue;
+    const speed = u.stats.speed || 0;
+    if (!u.quests) u.quests = {};
+    u.quests[SPEED_RESET_KEY] = { speed, at: '2026-09-28' };
+    u.stats.speed = 0;
+    u.statPoints = (u.statPoints || 0) + speed;
+    console.log(`[속도 스텟 초기화] ${u.username}(${u.nickname}) 속도 ${speed} → 0, 스텟포인트 +${speed}`);
+    count++;
+  }
+  if (count) { saveUsers(); setTimeout(saveUsers, 30000); setTimeout(saveUsers, 90000); }
+}
+function levelResetV35Record(user) {
+  const rec = user.quests && user.quests[LEVEL_RESET_V35];
+  return rec && typeof rec === 'object' ? rec : null;
 }
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
@@ -241,57 +315,51 @@ const ELITE_TYPES = {
 };
 const ELITE_RESPAWN_DELAY_MS = 60000;
 
-// pattern: 'nova'(제자리 예열 후 광역 파동) | 'dash'(조준 예열 후 직선 돌진)
+// ── 레이드 보스 (v3.6) ──────────────────────────────────
+// 보스마다 고유 패턴 3개를 번갈아 사용하고, 체력 50% 이하에서 분노(패턴 강화 + 공격 간격 단축 + 이동속도 증가).
+// 모든 공격은 "위험 지대(hazard)" — 바닥에 예고 표시가 먼저 뜨고 채워지면 발동. 클라이언트는 스냅샷의 hazards로 그림.
+// 보스는 슈퍼아머: 플레이어 공격에 경직·넉백되지 않음.
+// attacks: BOSS_ATTACKS의 키 목록, gapMs: 공격 사이 추적 시간, color: 위험 지대 색
 const BOSS_TYPES = {
   iceSlimeKing: {
-    name: '얼음 슬라임 킹', hp: 220, atk: 8, exp: 100, chaseSpeed: 55, aggroRange: 999, deaggroRange: 999999, r: 22,
-    weakness: 'fire', pattern: 'nova',
-    novaIntervalMs: 5000, novaTelegraphMs: 900, novaRadius: 100, novaDamage: 14, novaSlowMs: 2500,
+    name: '얼음 슬라임 킹', hp: 1500, atk: 16, exp: 320, chaseSpeed: 70, aggroRange: 999, deaggroRange: 999999, r: 22,
+    weakness: 'fire', color: '#8fd0ec', gapMs: 1500, attacks: ['iceShardRain', 'frostRings', 'iceLances'],
   },
   flameAlphaWolf: {
-    name: '불꽃 들개 대장', hp: 260, atk: 9, exp: 120, chaseSpeed: 100, aggroRange: 999, deaggroRange: 999999, r: 20,
-    weakness: 'ice', pattern: 'dash',
-    dashIntervalMs: 4500, dashTelegraphMs: 600, dashDurationMs: 350, dashSpeed: 500, dashDamage: 16, recoverMs: 800,
+    name: '불꽃 들개 대장', hp: 1700, atk: 18, exp: 360, chaseSpeed: 115, aggroRange: 999, deaggroRange: 999999, r: 20,
+    weakness: 'ice', color: '#ff7a3a', gapMs: 1300, attacks: ['flameDashes', 'flameRoar', 'flameDashes', 'emberRain'],
   },
   swampFrogKing: {
-    name: '독늪 개구리왕', hp: 200, atk: 7, exp: 90, chaseSpeed: 55, aggroRange: 999, deaggroRange: 999999, r: 22,
-    weakness: 'fire', pattern: 'nova',
-    novaIntervalMs: 4800, novaTelegraphMs: 900, novaRadius: 100, novaDamage: 13, novaSlowMs: 2500,
+    name: '독늪 개구리왕', hp: 1450, atk: 15, exp: 300, chaseSpeed: 65, aggroRange: 999, deaggroRange: 999999, r: 22,
+    weakness: 'fire', color: '#7ee07a', gapMs: 1400, attacks: ['poisonLob', 'tongueLash', 'leapSlam'],
   },
   canyonScorpionKing: {
-    name: '모래폭풍 전갈왕', hp: 240, atk: 8, exp: 105, chaseSpeed: 100, aggroRange: 999, deaggroRange: 999999, r: 21,
-    weakness: 'ice', pattern: 'dash',
-    dashIntervalMs: 4200, dashTelegraphMs: 550, dashDurationMs: 350, dashSpeed: 520, dashDamage: 15, recoverMs: 800,
+    name: '모래폭풍 전갈왕', hp: 1650, atk: 17, exp: 330, chaseSpeed: 105, aggroRange: 999, deaggroRange: 999999, r: 21,
+    weakness: 'ice', color: '#e8b84f', gapMs: 1300, attacks: ['sandStar', 'tailStrikes', 'sandStar', 'burrowAmbush'],
   },
   frostBatLord: {
-    name: '서리 박쥐 군주', hp: 210, atk: 7, exp: 95, chaseSpeed: 110, aggroRange: 999, deaggroRange: 999999, r: 20,
-    weakness: 'fire', pattern: 'dash',
-    dashIntervalMs: 4000, dashTelegraphMs: 500, dashDurationMs: 320, dashSpeed: 560, dashDamage: 14, recoverMs: 750,
+    name: '서리 박쥐 군주', hp: 1500, atk: 15, exp: 320, chaseSpeed: 120, aggroRange: 999, deaggroRange: 999999, r: 20,
+    weakness: 'fire', color: '#b4a8ff', gapMs: 1200, attacks: ['sonicBurst', 'blinkStrike', 'spiralBarrage'],
   },
   magmaGolem: {
-    name: '용암 골렘', hp: 280, atk: 9, exp: 115, chaseSpeed: 45, aggroRange: 999, deaggroRange: 999999, r: 24,
-    weakness: 'ice', pattern: 'nova',
-    novaIntervalMs: 5200, novaTelegraphMs: 950, novaRadius: 110, novaDamage: 15, novaSlowMs: 2500,
+    name: '용암 골렘', hp: 2000, atk: 20, exp: 380, chaseSpeed: 50, aggroRange: 999, deaggroRange: 999999, r: 24,
+    weakness: 'ice', color: '#ff5a2a', gapMs: 1600, attacks: ['lavaGrid', 'quake', 'meteors'],
   },
   ruinGuardian: {
-    name: '폐허의 수호자', hp: 260, atk: 8, exp: 110, chaseSpeed: 50, aggroRange: 999, deaggroRange: 999999, r: 23,
-    weakness: 'fire', pattern: 'nova',
-    novaIntervalMs: 5000, novaTelegraphMs: 900, novaRadius: 105, novaDamage: 14, novaSlowMs: 2500,
+    name: '폐허의 수호자', hp: 1850, atk: 18, exp: 360, chaseSpeed: 55, aggroRange: 999, deaggroRange: 999999, r: 23,
+    weakness: 'fire', color: '#c8a8ff', gapMs: 1400, attacks: ['crossLaser', 'rockFall', 'guardianPulse'],
   },
   goblinWarlord: {
-    name: '고블린 대장', hp: 230, atk: 9, exp: 108, chaseSpeed: 95, aggroRange: 999, deaggroRange: 999999, r: 21,
-    weakness: 'ice', pattern: 'dash',
-    dashIntervalMs: 4300, dashTelegraphMs: 580, dashDurationMs: 340, dashSpeed: 510, dashDamage: 15, recoverMs: 800,
+    name: '고블린 대장', hp: 1600, atk: 17, exp: 340, chaseSpeed: 100, aggroRange: 999, deaggroRange: 999999, r: 21,
+    weakness: 'ice', color: '#ffb84f', gapMs: 1300, attacks: ['bombBarrage', 'berserkSpin', 'warCry'],
   },
   ancientTreantLord: {
-    name: '고대 정령수', hp: 270, atk: 8, exp: 118, chaseSpeed: 48, aggroRange: 999, deaggroRange: 999999, r: 24,
-    weakness: 'fire', pattern: 'nova',
-    novaIntervalMs: 5100, novaTelegraphMs: 950, novaRadius: 108, novaDamage: 15, novaSlowMs: 2500,
+    name: '고대 정령수', hp: 1900, atk: 18, exp: 370, chaseSpeed: 50, aggroRange: 999, deaggroRange: 999999, r: 24,
+    weakness: 'fire', color: '#9ad65a', gapMs: 1500, attacks: ['rootEruption', 'thornPrison', 'natureWrath'],
   },
   abyssalNaga: {
-    name: '심연의 나가', hp: 250, atk: 8, exp: 112, chaseSpeed: 105, aggroRange: 999, deaggroRange: 999999, r: 22,
-    weakness: 'ice', pattern: 'dash',
-    dashIntervalMs: 4100, dashTelegraphMs: 520, dashDurationMs: 330, dashSpeed: 540, dashDamage: 15, recoverMs: 780,
+    name: '심연의 나가', hp: 1750, atk: 17, exp: 350, chaseSpeed: 110, aggroRange: 999, deaggroRange: 999999, r: 22,
+    weakness: 'ice', color: '#6cc4e8', gapMs: 1300, attacks: ['tidalWave', 'waterJets', 'abyssCurse'],
   },
 };
 
@@ -860,7 +928,7 @@ function spawnBoss(bossTypeKey) {
     chaseSpeed: t.chaseSpeed, wanderSpeed: 0, aggroRange: t.aggroRange, deaggroRange: t.deaggroRange,
     mode: 'wander', targetId: null, lastAttackAt: 0, stunUntil: 0,
     wanderDir: { x: 0, y: 0 }, wanderUntil: 0,
-    special: { phase: 'idle', nextAt: Date.now() + 3000, until: 0, dashDir: null, hitSet: new Set() },
+    special: { phase: 'idle', nextAt: Date.now() + 2500, busyUntil: 0, attackIdx: 0, queue: [], dash: null, enraged: false, retargetAt: 0, speedMult: 1, speedUntil: 0 },
   };
 }
 
@@ -918,7 +986,7 @@ function createRaidRoom(zoneKey, mode, hostId, hostName) {
   const decorations = decor ? decor.decorations.flatMap(([kind, count]) => scatterRing(kind, count, 260, true)) : [];
   const room = {
     id, kind: 'raid', zoneKey, mode, hostId, hostName, started: mode === 'solo', createdAt: Date.now(), world: RAID_WORLD,
-    players: new Map(), monsters: new Map([[boss.id, boss]]), projectiles: new Map(), boss,
+    players: new Map(), monsters: new Map([[boss.id, boss]]), projectiles: new Map(), hazards: new Map(), boss,
     landmarks: [], portals: [], obstacles, decorations, entryPoint: RAID_ENTRY,
   };
   rooms.set(id, room);
@@ -1116,110 +1184,631 @@ function dealMonsterContactDamage(room, m, target, dx, dy, dist) {
   sendTo(target, { type: 'player_hit', damage: dmg, hp: target.hp, maxHp: target.maxHp, x: target.x, y: target.y, stunMs: PLAYER_STUN_MS, defeated: false });
 }
 
-function applyNova(room, boss, t) {
-  for (const p of room.players.values()) {
-    const dist = Math.hypot(p.x - boss.x, p.y - boss.y);
-    if (dist > t.novaRadius) continue;
-    const dmg = applyGuardReduction(p, t.novaDamage);
-    p.hp = Math.max(0, p.hp - dmg);
-    if (p.hp <= 0) { handlePlayerDefeated(room, p, dmg); continue; }
-    const kbx = dist > 0 ? (p.x - boss.x) / dist : 1, kby = dist > 0 ? (p.y - boss.y) / dist : 0;
-    p.x += kbx * PLAYER_KNOCKBACK;
-    p.y += kby * PLAYER_KNOCKBACK;
-    p.vx = 0; p.vy = 0;
+// ── 레이드 보스 AI / 위험 지대 (v3.6) ─────────────────────
+let nextHazardId = 1;
+const BOSS_ENRAGE_HP_RATIO = 0.5;
+const BOSS_RETARGET_MS = 6000;
+
+function arenaClamp(x, y, pad = 40) {
+  return { x: Math.max(pad, Math.min(RAID_WORLD.w - pad, x)), y: Math.max(pad, Math.min(RAID_WORLD.h - pad, y)) };
+}
+function randomArenaPoint(pad = 70) {
+  return { x: pad + Math.random() * (RAID_WORLD.w - pad * 2), y: pad + Math.random() * (RAID_WORLD.h - pad * 2) };
+}
+function bossPlayers(room) { return [...room.players.values()]; }
+function findRoomPlayer(room, id) { return [...room.players.values()].find(p => p.id === id) || null; }
+function angleTo(from, to) { return Math.atan2(to.y - from.y, to.x - from.x); }
+
+// shape: 'circle'(x,y,r) | 'ring'(x,y, 안쪽 r2 ~ 바깥 r) | 'line'(x,y에서 angle 방향으로 len, 폭 w)
+// warnMs 동안 예고만 하고, activeMs 동안 판정 — tickMs가 있으면 장판처럼 그 간격으로 반복 피해
+function addHazard(room, boss, h) {
+  const now = Date.now();
+  const hz = {
+    shape: 'circle', x: 0, y: 0, r: 50, r2: 0, angle: 0, len: 0, w: 0, vx: 0, vy: 0,
+    warnMs: 800, activeMs: 150, tickMs: 0, dmg: 20, slowMs: 0, stunMs: 200, knock: PLAYER_KNOCKBACK,
+    color: BOSS_TYPES[boss.kind].color, consume: false, visualOnly: false,
+    followId: null, followUntilMs: 0, anchor: null,
+    ...h,
+  };
+  if (boss.special.enraged) hz.dmg = Math.round(hz.dmg * 1.25);
+  hz.id = nextHazardId++;
+  hz.bornAt = now;
+  hz.activeAt = now + hz.warnMs;
+  hz.endAt = hz.activeAt + hz.activeMs;
+  hz.followEndAt = hz.followUntilMs ? now + hz.followUntilMs : 0;
+  hz.hits = new Map();
+  room.hazards.set(hz.id, hz);
+  return hz;
+}
+
+// 맞았으면 밀려날 방향, 아니면 null
+function hazardHitDir(h, px, py, pr) {
+  const dx = px - h.x, dy = py - h.y;
+  if (h.shape === 'circle' || h.shape === 'ring') {
+    const d = Math.hypot(dx, dy);
+    if (d > h.r + pr) return null;
+    if (h.shape === 'ring' && d < h.r2 - pr) return null;
+    return d > 0 ? { x: dx / d, y: dy / d } : { x: 1, y: 0 };
+  }
+  if (h.shape === 'line') {
+    const c = Math.cos(h.angle), s = Math.sin(h.angle);
+    const along = dx * c + dy * s, perp = -dx * s + dy * c;
+    if (along < -pr || along > h.len + pr || Math.abs(perp) > h.w / 2 + pr) return null;
+    const sg = perp >= 0 ? 1 : -1;
+    return { x: -s * sg, y: c * sg };
+  }
+  return null;
+}
+
+function hurtPlayer(room, p, rawDmg, dir, o) {
+  const now = Date.now();
+  const dmg = applyGuardReduction(p, roll(rawDmg));
+  p.hp = Math.max(0, p.hp - dmg);
+  if (p.hp <= 0) { handlePlayerDefeated(room, p, dmg); return; }
+  if (o.knock) {
+    p.x += dir.x * o.knock;
+    p.y += dir.y * o.knock;
     clampToWorld(p, PLAYER_R, room.world);
     resolveLandmarksCollision(p, PLAYER_R, room);
     clampToWorld(p, PLAYER_R, room.world);
-    p.slowUntil = Date.now() + t.novaSlowMs;
-    p.stunUntil = Date.now() + 180;
-    sendTo(p, { type: 'player_hit', damage: dmg, hp: p.hp, maxHp: p.maxHp, x: p.x, y: p.y, stunMs: 180, defeated: false });
+  }
+  p.vx = 0; p.vy = 0;
+  if (o.slowMs) p.slowUntil = Math.max(p.slowUntil || 0, now + o.slowMs);
+  const stunMs = o.stunMs || 0;
+  if (stunMs) p.stunUntil = now + stunMs;
+  sendTo(p, { type: 'player_hit', damage: dmg, hp: p.hp, maxHp: p.maxHp, x: p.x, y: p.y, stunMs, defeated: false });
+}
+
+function updateHazards(room, dt, now) {
+  if (!room.hazards || !room.hazards.size) return;
+  for (const h of [...room.hazards.values()]) {
+    if (now > h.endAt) { room.hazards.delete(h.id); continue; }
+    if (h.anchor) { h.x = h.anchor.x; h.y = h.anchor.y; }
+    if (h.followId != null && now < h.followEndAt) {
+      const p = findRoomPlayer(room, h.followId);
+      if (p) { h.x = p.x; h.y = p.y; }
+    }
+    if (now < h.activeAt || h.visualOnly) continue;
+    if (h.vx || h.vy) {
+      h.x += h.vx * dt;
+      h.y += h.vy * dt;
+      if (h.x < -150 || h.x > RAID_WORLD.w + 150 || h.y < -150 || h.y > RAID_WORLD.h + 150) { room.hazards.delete(h.id); continue; }
+    }
+    for (const p of bossPlayers(room)) {
+      const dir = hazardHitDir(h, p.x, p.y, PLAYER_R);
+      if (!dir) continue;
+      const last = h.hits.get(p.id);
+      if (last != null && (!h.tickMs || now - last < h.tickMs)) continue;
+      h.hits.set(p.id, now);
+      hurtPlayer(room, p, h.dmg, dir, h);
+      if (h.consume) { room.hazards.delete(h.id); break; }
+    }
   }
 }
 
-function updateBossSpecial(room, boss, dt, now) {
-  const s = boss.special;
+function later(boss, ms, fn) { boss.special.queue.push({ at: Date.now() + ms, fn }); }
+
+// 탄환 한 발 — 예고 없이 날아가며 처음 맞은 플레이어에게 피해 후 소멸
+function bossBullet(room, boss, x, y, angle, speed, o = {}) {
+  return addHazard(room, boss, {
+    x, y, r: 10, warnMs: 0, activeMs: 4000, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    dmg: 14, knock: 16, stunMs: 120, consume: true, ...o,
+  });
+}
+function castWarn(room, boss, ms) {
+  addHazard(room, boss, { x: boss.x, y: boss.y, r: boss.r + 26, warnMs: ms, activeMs: 0, visualOnly: true, anchor: boss });
+}
+
+// 각 공격: c = { room, boss, enraged, target } → 보스가 제자리에서 시전하는 시간(ms)을 돌려줌
+const BOSS_ATTACKS = {
+  // ── 얼음 슬라임 킹 ──
+  iceShardRain: {
+    name: '얼음 파편 폭우',
+    run({ room, boss, enraged }) {
+      const waves = enraged ? 5 : 3;
+      for (let i = 0; i < waves; i++) {
+        later(boss, i * 450, () => {
+          for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 55, warnMs: 800, dmg: 20, slowMs: 1500 });
+          for (let k = 0; k < (enraged ? 5 : 3); k++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 55, warnMs: 900, dmg: 20, slowMs: 1500 }); }
+        });
+      }
+      return 600;
+    },
+  },
+  frostRings: {
+    name: '빙결 파동',
+    run({ room, boss, enraged }) {
+      const bands = [[0, 90], [90, 180], [180, 270], [270, 370], [370, 480]];
+      const x = boss.x, y = boss.y;
+      bands.forEach(([r2, r], i) => addHazard(room, boss, { shape: 'ring', x, y, r2, r, warnMs: 700 + i * 300, dmg: 24, slowMs: 2000 }));
+      if (enraged) {
+        const base = 700 + bands.length * 300 + 500;
+        [...bands].reverse().forEach(([r2, r], i) => addHazard(room, boss, { shape: 'ring', x, y, r2, r, warnMs: base + i * 300, dmg: 24, slowMs: 2000 }));
+        return base + bands.length * 300;
+      }
+      return 700 + bands.length * 300;
+    },
+  },
+  iceLances: {
+    name: '고드름 창',
+    run({ room, boss, enraged }) {
+      const volley = () => {
+        const target = findRoomPlayer(room, boss.targetId);
+        if (!target) return;
+        const n = enraged ? 5 : 3, base = angleTo(boss, target);
+        for (let i = 0; i < n; i++) {
+          addHazard(room, boss, { shape: 'line', x: boss.x, y: boss.y, angle: base + (i - (n - 1) / 2) * 0.35, len: 760, w: 46, warnMs: 750, dmg: 26, stunMs: 300 });
+        }
+      };
+      volley();
+      if (enraged) { later(boss, 550, volley); return 1350; }
+      return 900;
+    },
+  },
+
+  // ── 불꽃 들개 대장 ──
+  flameDashes: {
+    name: '화염 연속 돌진',
+    run({ room, boss, enraged }) {
+      const count = enraged ? 4 : 3;
+      for (let i = 0; i < count; i++) {
+        later(boss, i * 850, () => {
+          const target = findRoomPlayer(room, boss.targetId);
+          if (!target) return;
+          const angle = angleTo(boss, target);
+          const want = Math.min(480, Math.hypot(target.x - boss.x, target.y - boss.y) + 140);
+          const end = arenaClamp(boss.x + Math.cos(angle) * want, boss.y + Math.sin(angle) * want, boss.r + 30);
+          const len = Math.hypot(end.x - boss.x, end.y - boss.y);
+          const x0 = boss.x, y0 = boss.y;
+          addHazard(room, boss, { shape: 'line', x: x0, y: y0, angle, len, w: 60, warnMs: 520, activeMs: 200, dmg: 26, knock: 50, stunMs: 250 });
+          later(boss, 520, () => { boss.special.dash = { vx: Math.cos(angle) * len / 0.2, vy: Math.sin(angle) * len / 0.2, until: Date.now() + 200 }; });
+          later(boss, 760, () => {
+            for (let d = 0; d <= len; d += 55) {
+              addHazard(room, boss, { x: x0 + Math.cos(angle) * d, y: y0 + Math.sin(angle) * d, r: 30, warnMs: 0, activeMs: 2600, tickMs: 500, dmg: 8, knock: 0, stunMs: 0 });
+            }
+          });
+        });
+      }
+      return count * 850 + 150;
+    },
+  },
+  flameRoar: {
+    name: '불꽃 포효',
+    run({ room, boss, enraged }) {
+      const x = boss.x, y = boss.y;
+      addHazard(room, boss, { x, y, r: 170, warnMs: 950, dmg: 32, knock: 70, stunMs: 350 });
+      addHazard(room, boss, { shape: 'ring', x, y, r2: 170, r: 340, warnMs: 1550, dmg: 28, knock: 50 });
+      if (enraged) { addHazard(room, boss, { x, y, r: 170, warnMs: 2150, dmg: 32, knock: 70, stunMs: 350 }); return 2150; }
+      return 1550;
+    },
+  },
+  emberRain: {
+    name: '불씨 비',
+    run({ room, boss, enraged }) {
+      const n = enraged ? 18 : 12;
+      for (let i = 0; i < n; i++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 48, warnMs: 700 + i * 80, dmg: 18, knock: 30 }); }
+      for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 60, warnMs: 900, dmg: 22, knock: 40 });
+      return 500;
+    },
+  },
+
+  // ── 독늪 개구리왕 ──
+  poisonLob: {
+    name: '독 덩어리 투척',
+    run({ room, boss, enraged }) {
+      const waves = enraged ? 3 : 2;
+      for (let i = 0; i < waves; i++) {
+        later(boss, i * 700, () => {
+          for (const p of bossPlayers(room)) {
+            const a = Math.random() * Math.PI * 2, off = Math.random() * 30;
+            addHazard(room, boss, { x: p.x + Math.cos(a) * off, y: p.y + Math.sin(a) * off, r: 72, warnMs: 900, activeMs: 3500, tickMs: 600, dmg: 12, slowMs: 1200, knock: 0, stunMs: 0 });
+          }
+        });
+      }
+      return 500;
+    },
+  },
+  tongueLash: {
+    name: '혀 채찍',
+    run({ room, boss, enraged }) {
+      const lash = () => {
+        for (const p of bossPlayers(room)) addHazard(room, boss, { shape: 'line', x: boss.x, y: boss.y, angle: angleTo(boss, p), len: 700, w: 36, warnMs: 480, dmg: 24, knock: 40, stunMs: 450 });
+      };
+      lash();
+      if (enraged) { later(boss, 650, lash); return 1300; }
+      return 700;
+    },
+  },
+  leapSlam: {
+    name: '대점프 내려찍기',
+    run({ room, boss, enraged }) {
+      const leap = (delay) => later(boss, delay, () => {
+        const ps = bossPlayers(room);
+        const target = findRoomPlayer(room, boss.targetId) || ps[0];
+        if (!target) return;
+        const pos = arenaClamp(target.x, target.y, boss.r + 30);
+        addHazard(room, boss, { x: pos.x, y: pos.y, r: 115, warnMs: 1100, dmg: 36, knock: 80, stunMs: 400 });
+        later(boss, 1100, () => { boss.x = pos.x; boss.y = pos.y; });
+      });
+      leap(0);
+      if (enraged) { leap(1300); return 2550; }
+      return 1250;
+    },
+  },
+
+  // ── 모래폭풍 전갈왕 ──
+  sandStar: {
+    name: '모래 폭풍',
+    run({ room, boss, enraged }) {
+      const stars = enraged ? 3 : 2;
+      for (let k = 0; k < stars; k++) {
+        later(boss, k * 650, () => {
+          for (let i = 0; i < 8; i++) addHazard(room, boss, { shape: 'line', x: boss.x, y: boss.y, angle: i * Math.PI / 4 + k * Math.PI / 8, len: 950, w: 44, warnMs: 750, dmg: 24, stunMs: 250 });
+        });
+      }
+      return 750 + (stars - 1) * 650 + 100;
+    },
+  },
+  tailStrikes: {
+    name: '독침 연타',
+    run({ room, boss, enraged }) {
+      const n = enraged ? 6 : 4;
+      for (let i = 0; i < n; i++) {
+        later(boss, i * 330, () => {
+          const target = findRoomPlayer(room, boss.targetId);
+          if (target) addHazard(room, boss, { x: target.x, y: target.y, r: 62, warnMs: 620, dmg: 26, stunMs: 450 });
+        });
+      }
+      return 400;
+    },
+  },
+  burrowAmbush: {
+    name: '잠행 기습',
+    run({ room, boss, enraged }) {
+      const n = enraged ? 4 : 3;
+      for (let i = 0; i < n; i++) {
+        later(boss, i * 900, () => {
+          for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 70, warnMs: 1200, followId: p.id, followUntilMs: 700, dmg: 28, knock: 60, stunMs: 300 });
+        });
+      }
+      later(boss, (n - 1) * 900 + 1200, () => {
+        const target = findRoomPlayer(room, boss.targetId);
+        if (target) { const pos = arenaClamp(target.x, target.y, boss.r + 30); boss.x = pos.x; boss.y = pos.y; }
+      });
+      return (n - 1) * 900 + 1300;
+    },
+  },
+
+  // ── 서리 박쥐 군주 ──
+  sonicBurst: {
+    name: '초음파 탄막',
+    run({ room, boss, enraged }) {
+      const waves = enraged ? 3 : 2, n = enraged ? 20 : 14;
+      castWarn(room, boss, 500);
+      for (let i = 0; i < waves; i++) {
+        later(boss, 500 + i * 450, () => {
+          for (let j = 0; j < n; j++) bossBullet(room, boss, boss.x, boss.y, (j + i * 0.5) * Math.PI * 2 / n, 240, { dmg: 16 });
+        });
+      }
+      return 500 + waves * 450;
+    },
+  },
+  blinkStrike: {
+    name: '순간이동 급습',
+    run({ room, boss, enraged }) {
+      const n = enraged ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        later(boss, i * 1000, () => {
+          const target = findRoomPlayer(room, boss.targetId);
+          if (!target) return;
+          const pos = arenaClamp(target.x, target.y, boss.r + 30);
+          addHazard(room, boss, { x: pos.x, y: pos.y, r: 95, warnMs: 750, dmg: 30, knock: 70, stunMs: 350 });
+          later(boss, 750, () => {
+            boss.x = pos.x; boss.y = pos.y;
+            for (let j = 0; j < 8; j++) bossBullet(room, boss, pos.x, pos.y, j * Math.PI / 4, 260, { dmg: 12 });
+          });
+        });
+      }
+      return n * 1000 + 100;
+    },
+  },
+  spiralBarrage: {
+    name: '나선 탄막',
+    run({ room, boss, enraged }) {
+      const arms = enraged ? 4 : 3;
+      castWarn(room, boss, 500);
+      let rot = Math.random() * Math.PI * 2;
+      for (let tMs = 500; tMs < 2900; tMs += 170) {
+        later(boss, tMs, () => {
+          rot += 0.33;
+          for (let a = 0; a < arms; a++) bossBullet(room, boss, boss.x, boss.y, rot + a * Math.PI * 2 / arms, 240, { dmg: 14 });
+        });
+      }
+      return 2900;
+    },
+  },
+
+  // ── 용암 골렘 ──
+  lavaGrid: {
+    name: '용암 분출',
+    run({ room, boss, enraged }) {
+      const stripe = 140, cols = Math.ceil(RAID_WORLD.w / stripe), rows = Math.ceil(RAID_WORLD.h / stripe);
+      const vertical = (parity, warnMs) => {
+        for (let i = parity; i < cols; i += 2) addHazard(room, boss, { shape: 'line', x: i * stripe + stripe / 2, y: 0, angle: Math.PI / 2, len: RAID_WORLD.h, w: stripe, warnMs, activeMs: 200, dmg: 30, knock: 0, stunMs: 300 });
+      };
+      const horizontal = (parity, warnMs) => {
+        for (let j = parity; j < rows; j += 2) addHazard(room, boss, { shape: 'line', x: 0, y: j * stripe + stripe / 2, angle: 0, len: RAID_WORLD.w, w: stripe, warnMs, activeMs: 200, dmg: 30, knock: 0, stunMs: 300 });
+      };
+      const first = Math.random() < 0.5 ? 0 : 1;
+      vertical(first, 1000);
+      vertical(1 - first, 2000);
+      if (enraged) { horizontal(0, 3000); horizontal(1, 3900); return 1500; }
+      return 1200;
+    },
+  },
+  quake: {
+    name: '대지진',
+    run({ room, boss, enraged }) {
+      const x = boss.x, y = boss.y;
+      addHazard(room, boss, { shape: 'ring', x, y, r2: 130, r: 1800, warnMs: 1300, dmg: 40, knock: 0, stunMs: 500 });
+      addHazard(room, boss, { x, y, r: 130, warnMs: 2000, dmg: 34, knock: 90, stunMs: 300 });
+      if (enraged) { addHazard(room, boss, { shape: 'ring', x, y, r2: 130, r: 1800, warnMs: 3000, dmg: 40, knock: 0, stunMs: 500 }); return 3000; }
+      return 2000;
+    },
+  },
+  meteors: {
+    name: '용암 운석',
+    run({ room, boss, enraged }) {
+      const spots = bossPlayers(room).map(p => ({ x: p.x, y: p.y }));
+      while (spots.length < (enraged ? 7 : 5)) spots.push(randomArenaPoint());
+      for (const pt of spots) {
+        addHazard(room, boss, { x: pt.x, y: pt.y, r: 105, warnMs: 1400, dmg: 38, knock: 60, stunMs: 300 });
+        addHazard(room, boss, { x: pt.x, y: pt.y, r: 80, warnMs: 1400, activeMs: 2500, tickMs: 500, dmg: 10, knock: 0, stunMs: 0 });
+      }
+      return 600;
+    },
+  },
+
+  // ── 폐허의 수호자 ──
+  crossLaser: {
+    name: '십자 레이저',
+    run({ room, boss, enraged }) {
+      const seq = enraged ? [0, 1, 0, 1] : [0, 1];
+      seq.forEach((diag, k) => later(boss, k * 700, () => {
+        for (let i = 0; i < 4; i++) addHazard(room, boss, { shape: 'line', x: boss.x, y: boss.y, angle: i * Math.PI / 2 + diag * Math.PI / 4, len: 1100, w: 60, warnMs: 800, dmg: 30, stunMs: 250 });
+      }));
+      return 800 + (seq.length - 1) * 700 + 100;
+    },
+  },
+  rockFall: {
+    name: '추적 낙석',
+    run({ room, boss, enraged }) {
+      const n = enraged ? 9 : 6;
+      for (let i = 0; i < n; i++) {
+        later(boss, i * 280, () => {
+          const targets = enraged ? bossPlayers(room) : [findRoomPlayer(room, boss.targetId)].filter(Boolean);
+          for (const p of targets) addHazard(room, boss, { x: p.x, y: p.y, r: 62, warnMs: 650, dmg: 22, stunMs: 250 });
+        });
+      }
+      return 400;
+    },
+  },
+  guardianPulse: {
+    name: '수호자의 파동',
+    run({ room, boss, enraged }) {
+      const x = boss.x, y = boss.y;
+      addHazard(room, boss, { x, y, r: 150, warnMs: 850, dmg: 30, knock: 60, stunMs: 250 });
+      addHazard(room, boss, { shape: 'ring', x, y, r2: 250, r: 480, warnMs: 1400, dmg: 30, knock: 40 });
+      if (enraged) {
+        addHazard(room, boss, { shape: 'ring', x, y, r2: 150, r: 250, warnMs: 1950, dmg: 30, knock: 40 });
+        addHazard(room, boss, { shape: 'ring', x, y, r2: 480, r: 1800, warnMs: 1950, dmg: 30, knock: 0 });
+        return 2000;
+      }
+      return 1450;
+    },
+  },
+
+  // ── 고블린 대장 ──
+  bombBarrage: {
+    name: '폭탄 투척',
+    run({ room, boss, enraged }) {
+      const waves = enraged ? 4 : 3;
+      for (let i = 0; i < waves; i++) {
+        later(boss, i * 500, () => {
+          for (const p of bossPlayers(room)) {
+            for (let k = 0; k < 2; k++) {
+              // 한 발은 지금 위치, 한 발은 이동 방향 앞쪽(예측 사격)
+              const lead = k === 0 ? 0 : 0.9;
+              const a = Math.random() * Math.PI * 2, off = Math.random() * 60;
+              addHazard(room, boss, { x: p.x + (p.vx || 0) * lead + Math.cos(a) * off, y: p.y + (p.vy || 0) * lead + Math.sin(a) * off, r: 65, warnMs: 1200, dmg: 26, knock: 70, stunMs: 250 });
+            }
+          }
+        });
+      }
+      return 400;
+    },
+  },
+  berserkSpin: {
+    name: '광란의 회전',
+    run({ room, boss, enraged }) {
+      const spinMs = enraged ? 3600 : 2800;
+      addHazard(room, boss, { x: boss.x, y: boss.y, r: 75, warnMs: 600, activeMs: spinMs, tickMs: 400, dmg: 14, knock: 50, stunMs: 0, anchor: boss });
+      boss.special.speedMult = 2.2;
+      boss.special.speedUntil = Date.now() + 600 + spinMs;
+      return 600;
+    },
+  },
+  warCry: {
+    name: '전투 함성',
+    run({ room, boss }) {
+      addHazard(room, boss, { x: boss.x, y: boss.y, r: 230, warnMs: 1000, dmg: 18, knock: 0, stunMs: 900 });
+      later(boss, 1000, () => {
+        for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 70, warnMs: 700, dmg: 26, knock: 70, stunMs: 250 });
+      });
+      return 1100;
+    },
+  },
+
+  // ── 고대 정령수 ──
+  rootEruption: {
+    name: '뿌리 가시',
+    run({ room, boss, enraged }) {
+      const x0 = boss.x, y0 = boss.y;
+      const angles = bossPlayers(room).map(p => angleTo(boss, p));
+      if (enraged) for (let k = 0; k < 3; k++) angles.push(Math.random() * Math.PI * 2);
+      for (const a of angles) {
+        for (let k = 1; k <= 11; k++) {
+          later(boss, k * 85, () => addHazard(room, boss, { x: x0 + Math.cos(a) * k * 65, y: y0 + Math.sin(a) * k * 65, r: 42, warnMs: 450, dmg: 22, knock: 30, stunMs: 500 }));
+        }
+      }
+      return 600;
+    },
+  },
+  thornPrison: {
+    name: '가시 감옥',
+    run({ room, boss, enraged }) {
+      for (const p of bossPlayers(room)) {
+        addHazard(room, boss, { shape: 'ring', x: p.x, y: p.y, r2: 75, r: 150, warnMs: 700, dmg: 20, slowMs: 1500, knock: 0 });
+        addHazard(room, boss, { x: p.x, y: p.y, r: 75, warnMs: 1500, dmg: 34, knock: 60, stunMs: 300 });
+        if (enraged) addHazard(room, boss, { shape: 'ring', x: p.x, y: p.y, r2: 150, r: 260, warnMs: 1500, dmg: 20, slowMs: 1500, knock: 0 });
+      }
+      return 900;
+    },
+  },
+  natureWrath: {
+    name: '대자연의 분노',
+    run({ room, boss, enraged }) {
+      const n = enraged ? 22 : 14;
+      for (let i = 0; i < n; i++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 60, warnMs: 1000 + (i % 3) * 250, dmg: 22, knock: 40 }); }
+      for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 60, warnMs: 1000, dmg: 22, knock: 40 });
+      return 600;
+    },
+  },
+
+  // ── 심연의 나가 ──
+  tidalWave: {
+    name: '해일',
+    run({ room, boss, enraged }) {
+      const seg = 100, n = Math.ceil(RAID_WORLD.h / seg), speed = 270;
+      const wall = (fromLeft, delay) => {
+        const gap = 1 + Math.floor(Math.random() * (n - 3));
+        for (let j = 0; j < n; j++) {
+          if (j === gap || j === gap + 1) continue;
+          addHazard(room, boss, {
+            shape: 'line', x: fromLeft ? 30 : RAID_WORLD.w - 30, y: j * seg, angle: Math.PI / 2, len: seg, w: 44,
+            vx: fromLeft ? speed : -speed, warnMs: 900 + delay, activeMs: RAID_WORLD.w / speed * 1000, dmg: 30, knock: 50, stunMs: 300,
+          });
+        }
+      };
+      const fromLeft = Math.random() < 0.5;
+      wall(fromLeft, 0);
+      if (enraged) wall(!fromLeft, 1600);
+      return 1000;
+    },
+  },
+  waterJets: {
+    name: '물줄기 난사',
+    run({ room, boss, enraged }) {
+      const volleys = enraged ? 4 : 3;
+      castWarn(room, boss, 400);
+      for (let i = 0; i < volleys; i++) {
+        later(boss, 400 + i * 420, () => {
+          for (const p of bossPlayers(room)) {
+            const base = angleTo(boss, p);
+            for (let k = -2; k <= 2; k++) bossBullet(room, boss, boss.x, boss.y, base + k * 0.18, 330, { dmg: 16 });
+          }
+        });
+      }
+      return 400 + volleys * 420;
+    },
+  },
+  abyssCurse: {
+    name: '심연의 저주',
+    run({ room, boss, enraged }) {
+      const curse = () => {
+        for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 95, warnMs: 1600, followId: p.id, followUntilMs: 1000, dmg: 34, knock: 70, stunMs: 300 });
+        addHazard(room, boss, { x: boss.x, y: boss.y, r: 120, warnMs: 1600, dmg: 30, knock: 70 });
+      };
+      curse();
+      if (enraged) later(boss, 1800, curse);
+      return 700;
+    },
+  },
+};
+
+function updateBoss(room, boss, dt, now) {
   const t = BOSS_TYPES[boss.kind];
-  if (t.pattern === 'nova') {
-    if (s.phase === 'telegraph') {
-      if (now >= s.until) {
-        s.phase = 'idle';
-        applyNova(room, boss, t);
-        s.nextAt = now + t.novaIntervalMs;
-      }
-      return true;
-    }
-    if (boss.mode === 'chase' && now >= s.nextAt) {
-      s.phase = 'telegraph';
-      s.until = now + t.novaTelegraphMs;
-      return true;
-    }
-    return false;
+  const s = boss.special;
+  const ps = bossPlayers(room);
+
+  // 타깃: 지금 타깃이 사라졌거나 일정 시간이 지나면 방 안의 다른 플레이어로 바꿈(파티원 전원이 노려짐)
+  let target = findRoomPlayer(room, boss.targetId);
+  if (ps.length && (!target || now >= s.retargetAt)) {
+    target = ps[Math.floor(Math.random() * ps.length)];
+    boss.targetId = target.id;
+    s.retargetAt = now + BOSS_RETARGET_MS;
   }
-  if (t.pattern === 'dash') {
-    if (s.phase === 'telegraph') {
-      if (now >= s.until) {
-        const target = [...room.players.values()].find(p => p.id === boss.targetId);
-        if (target) {
-          const dx = target.x - boss.x, dy = target.y - boss.y, len = Math.hypot(dx, dy) || 1;
-          s.dashDir = { x: dx / len, y: dy / len };
-        } else {
-          s.dashDir = { x: 1, y: 0 };
-        }
-        s.phase = 'dash';
-        s.until = now + t.dashDurationMs;
-        s.hitSet = new Set();
-      }
-      return true;
-    }
-    if (s.phase === 'dash') {
-      boss.x += s.dashDir.x * t.dashSpeed * dt;
-      boss.y += s.dashDir.y * t.dashSpeed * dt;
-      for (const p of room.players.values()) {
-        if (s.hitSet.has(p.id)) continue;
-        const dx = p.x - boss.x, dy = p.y - boss.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist < boss.r + PLAYER_R + 6) {
-          s.hitSet.add(p.id);
-          dealMonsterContactDamage(room, { atk: t.dashDamage }, p, dx, dy, dist);
-        }
-      }
-      if (now >= s.until) { s.phase = 'recover'; s.until = now + t.recoverMs; }
-      return true;
-    }
-    if (s.phase === 'recover') {
-      if (now >= s.until) { s.phase = 'idle'; s.nextAt = now + t.dashIntervalMs; }
-      return true;
-    }
-    if (boss.mode === 'chase' && now >= s.nextAt) {
-      s.phase = 'telegraph';
-      s.until = now + t.dashTelegraphMs;
-      return true;
-    }
-    return false;
+  if (!target) { boss.targetId = null; return; }
+  boss.mode = 'chase';
+
+  if (!s.enraged && boss.hp <= boss.maxHp * BOSS_ENRAGE_HP_RATIO) {
+    s.enraged = true;
+    s.nextAt = Math.min(s.nextAt, now + 800);
+    broadcastRoom(room, { type: 'boss_enrage', name: boss.name });
   }
-  return false;
+
+  if (s.queue.length) {
+    const due = s.queue.filter(q => q.at <= now);
+    s.queue = s.queue.filter(q => q.at > now);
+    for (const q of due) q.fn();
+  }
+
+  if (s.dash) {
+    boss.x += s.dash.vx * dt;
+    boss.y += s.dash.vy * dt;
+    if (now >= s.dash.until) s.dash = null;
+  }
+
+  if (now < s.busyUntil || s.dash) {
+    s.phase = 'telegraph';
+  } else if (now >= s.nextAt) {
+    const key = t.attacks[s.attackIdx % t.attacks.length];
+    s.attackIdx++;
+    const attack = BOSS_ATTACKS[key];
+    const busy = attack.run({ room, boss, enraged: s.enraged, target });
+    s.busyUntil = now + busy;
+    s.nextAt = s.busyUntil + (s.enraged ? t.gapMs * 0.55 : t.gapMs);
+    s.phase = 'telegraph';
+    broadcastRoom(room, { type: 'boss_cast', id: boss.id, text: attack.name, x: round1(boss.x), y: round1(boss.y) });
+  } else {
+    s.phase = 'idle';
+    const slowMult = (boss.slowUntil && now < boss.slowUntil) ? 0.6 : 1;
+    const speedMult = (s.speedUntil && now < s.speedUntil) ? s.speedMult : 1;
+    const speed = t.chaseSpeed * (s.enraged ? 1.3 : 1) * slowMult * speedMult;
+    const dx = target.x - boss.x, dy = target.y - boss.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > boss.r + PLAYER_R + 4) {
+      boss.x += (dx / dist) * speed * dt;
+      boss.y += (dy / dist) * speed * dt;
+    } else if (now - boss.lastAttackAt >= MONSTER_ATTACK_COOLDOWN_MS) {
+      boss.lastAttackAt = now;
+      dealMonsterContactDamage(room, boss, target, dx, dy, dist);
+    }
+  }
+  clampToWorld(boss, boss.r, room.world);
+  resolveLandmarksCollision(boss, boss.r, room);
+  clampToWorld(boss, boss.r, room.world);
 }
 
 function updateMonsters(room, dt, now) {
   if (room.kind === 'raid' && room.started === false) return; // 방장이 시작 누르기 전엔 보스가 가만히 있음
   for (const m of room.monsters.values()) {
+    if (m.isBoss) { updateBoss(room, m, dt, now); continue; } // 보스는 슈퍼아머 — 경직 무시
     if (now < m.stunUntil) {
       clampToWorld(m, m.r, room.world);
       resolveLandmarksCollision(m, m.r, room);
       clampToWorld(m, m.r, room.world);
       continue;
-    }
-
-    if (m.isBoss) {
-      let target = m.targetId != null ? [...room.players.values()].find(p => p.id === m.targetId) : null;
-      if (m.mode === 'chase' && !target) { m.mode = 'wander'; m.targetId = null; }
-      if (m.mode === 'wander') {
-        for (const p of room.players.values()) { m.mode = 'chase'; m.targetId = p.id; break; }
-      }
-      if (updateBossSpecial(room, m, dt, now)) {
-        clampToWorld(m, m.r, room.world);
-        continue;
-      }
     }
 
     let target = m.targetId != null ? [...room.players.values()].find(p => p.id === m.targetId) : null;
@@ -1268,19 +1857,22 @@ function updateMonsters(room, dt, now) {
 // 몬스터 한 마리에게 피해를 적용 — 넉백/기절/처치 보상까지 melee·투사체 공격이 공통으로 사용
 function applyHitToMonster(room, player, m, dmg, now) {
   m.hp = Math.max(0, m.hp - dmg);
-  m.mode = 'chase';
-  m.targetId = player.id;
   const hit = { monsterId: m.id, damage: dmg, x: m.x, y: m.y, monsterHp: m.hp, monsterMaxHp: m.maxHp, defeated: false, isBoss: !!m.isBoss };
 
-  const dx = m.x - player.x, dy = m.y - player.y;
-  const dist = Math.hypot(dx, dy);
-  const kb = dist > 0 ? { x: dx / dist, y: dy / dist } : { x: 1, y: 0 };
-  m.x += kb.x * MONSTER_KNOCKBACK;
-  m.y += kb.y * MONSTER_KNOCKBACK;
-  clampToWorld(m, m.r, room.world);
-  resolveLandmarksCollision(m, m.r, room);
-  clampToWorld(m, m.r, room.world);
-  m.stunUntil = now + MONSTER_STUN_MS;
+  // 보스는 슈퍼아머 — 넉백·경직 없고, 타깃도 스스로 정함(updateBoss)
+  if (!m.isBoss) {
+    m.mode = 'chase';
+    m.targetId = player.id;
+    const dx = m.x - player.x, dy = m.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    const kb = dist > 0 ? { x: dx / dist, y: dy / dist } : { x: 1, y: 0 };
+    m.x += kb.x * MONSTER_KNOCKBACK;
+    m.y += kb.y * MONSTER_KNOCKBACK;
+    clampToWorld(m, m.r, room.world);
+    resolveLandmarksCollision(m, m.r, room);
+    clampToWorld(m, m.r, room.world);
+    m.stunUntil = now + MONSTER_STUN_MS;
+  }
 
   if (m.hp <= 0) {
     hit.defeated = true;
@@ -1300,6 +1892,8 @@ function applyHitToMonster(room, player, m, dmg, now) {
       }
       room.monsters.delete(m.id);
       room.boss = null;
+      m.special.queue = [];
+      if (room.hazards) room.hazards.clear();
       const roomId = room.id;
       setTimeout(() => {
         const r = rooms.get(roomId);
@@ -1554,6 +2148,7 @@ function tick(dt) {
 
     updateMonsters(room, dt, now);
     updateProjectiles(room, dt, now);
+    updateHazards(room, dt, now);
 
     const snapshot = JSON.stringify({
       type: 'state',
@@ -1568,7 +2163,14 @@ function tick(dt) {
         id: m.id, x: round1(m.x), y: round1(m.y),
         kind: m.kind, hp: m.hp, maxHp: m.maxHp, isBoss: !!m.isBoss, isElite: !!m.isElite,
         phase: m.special ? m.special.phase : undefined,
+        enraged: m.special ? m.special.enraged : undefined,
       })),
+      // 위험 지대는 한 번에 수십 개가 뜨므로 모양별로 필요한 값만 짧은 키로 보냄(s: c=원, r=고리, l=직선)
+      hazards: room.hazards ? [...room.hazards.values()].map(h => {
+        const o = { s: h.shape[0], x: round1(h.x), y: round1(h.y), c: h.color, f: h.warnMs ? Math.round(Math.min(1, (now - h.bornAt) / h.warnMs) * 100) / 100 : 1, on: now >= h.activeAt && !h.visualOnly ? 1 : 0 };
+        if (h.shape === 'line') { o.a = Math.round(h.angle * 1000) / 1000; o.l = Math.round(h.len); o.w = h.w; } else { o.r = h.r; if (h.shape === 'ring') o.r2 = h.r2; }
+        return o;
+      }) : undefined,
     });
     for (const p of room.players.values()) {
       if (p.ws.readyState === p.ws.OPEN) p.ws.send(snapshot);
@@ -1639,6 +2241,7 @@ function spawnPlayerForUser(ws, user) {
     ownedSkills: user.ownedSkills, equippedSkills: user.equippedSkills, hasMap: !!user.hasMap, hasSeenTutorial: !!user.hasSeenTutorial,
     guild: guild ? publicGuild(guild) : null, isGuildOwner: !!(guild && guild.ownerUsername === user.username),
     homeTownName: HOME_TOWNS[user.homeTown || 'capital'].name,
+    levelResetV35: levelResetV35Record(user),
   });
   sendTo(player, { type: 'welcome', id, tickMs: 1000 / TICK_RATE, self: { hp: player.hp, maxHp: player.maxHp, level: player.level } });
   const spawnRegion = regionAt(player.x, player.y);
