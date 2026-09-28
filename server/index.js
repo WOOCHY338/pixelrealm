@@ -2,12 +2,18 @@ import { WebSocketServer } from 'ws';
 import fs from 'fs';
 import crypto from 'crypto';
 import http from 'http';
+import zlib from 'zlib';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as db from './db.js';
 
 const PORT = process.env.PORT || 8765;
 const TICK_RATE = 30;
+// 오픈월드 스냅샷은 TICK_RATE / WORLD_SNAPSHOT_EVERY 번(초당 15번)만 전송, 몬스터는 플레이어 기준 이 범위 안만
+const WORLD_SNAPSHOT_EVERY = 2;
+const SNAPSHOT_VIEW_HALF_W = 1400;
+const SNAPSHOT_VIEW_HALF_H = 900;
+let snapshotTick = 0;
 // 진짜 오픈월드처럼 — 지역 하나하나와 지역 사이 거리를 전부 2배로 키움
 const WORLD_SCALE = 2;
 const OVERWORLD = { w: 4800 * WORLD_SCALE, h: 4800 * WORLD_SCALE, wallThickness: 24 };
@@ -2113,6 +2119,7 @@ function useSkillSlot(player, room, slot, now) {
 // ── 메인 루프 ───────────────────────────────────────────
 function tick(dt) {
   const now = Date.now();
+  snapshotTick++;
   for (const room of rooms.values()) {
     for (const p of room.players.values()) {
       if (now < p.stunUntil) continue;
@@ -2150,30 +2157,41 @@ function tick(dt) {
     updateProjectiles(room, dt, now);
     updateHazards(room, dt, now);
 
-    const snapshot = JSON.stringify({
-      type: 'state',
-      players: [...room.players.values()].map(p => ({
+    // ── 스냅샷 전송 — Render 무료 전송량(월 5GB) 안에서 돌도록 줄임 ──
+    // 오픈월드는 초당 15번(레이드는 탄막이 빨라서 30번 유지), 몬스터는 각 플레이어 화면 근처 것만 보냄.
+    // 전에는 오픈월드 몬스터 전체(140마리 이상)를 초당 30번 모두에게 보내서 1인당 시간당 약 1GB가 나갔음
+    if (room.kind === 'world' && snapshotTick % WORLD_SNAPSHOT_EVERY !== 0) continue;
+    if (!room.players.size) continue;
+    const playersJson = JSON.stringify([...room.players.values()].map(p => ({
         id: p.id, x: round1(p.x), y: round1(p.y),
         facing: p.facing, name: p.name, hp: p.hp, maxHp: p.maxHp, level: p.level, guildTag: p.guildTag || null,
         weaponKey: p.weapon.key, weaponElement: p.weapon.element,
         zoneName: room.kind === 'world' ? regionAt(p.x, p.y).name : null,
         zoneKey: room.kind === 'world' ? regionAt(p.x, p.y).key : room.zoneKey,
-      })),
-      monsters: [...room.monsters.values()].map(m => ({
+      })));
+    const monsterViews = [...room.monsters.values()].map(m => ({
+      m,
+      json: JSON.stringify({
         id: m.id, x: round1(m.x), y: round1(m.y),
-        kind: m.kind, hp: m.hp, maxHp: m.maxHp, isBoss: !!m.isBoss, isElite: !!m.isElite,
+        kind: m.kind, hp: m.hp, maxHp: m.maxHp, isBoss: !!m.isBoss || undefined, isElite: !!m.isElite || undefined,
         phase: m.special ? m.special.phase : undefined,
         enraged: m.special ? m.special.enraged : undefined,
-      })),
+      }),
+    }));
+    const hazardsJson = JSON.stringify(
       // 위험 지대는 한 번에 수십 개가 뜨므로 모양별로 필요한 값만 짧은 키로 보냄(s: c=원, r=고리, l=직선)
-      hazards: room.hazards ? [...room.hazards.values()].map(h => {
+      room.hazards ? [...room.hazards.values()].map(h => {
         const o = { s: h.shape[0], x: round1(h.x), y: round1(h.y), c: h.color, f: h.warnMs ? Math.round(Math.min(1, (now - h.bornAt) / h.warnMs) * 100) / 100 : 1, on: now >= h.activeAt && !h.visualOnly ? 1 : 0 };
         if (h.shape === 'line') { o.a = Math.round(h.angle * 1000) / 1000; o.l = Math.round(h.len); o.w = h.w; } else { o.r = h.r; if (h.shape === 'ring') o.r2 = h.r2; }
         return o;
-      }) : undefined,
-    });
+      }) : []);
+    const allMonstersJson = room.kind === 'world' ? null : monsterViews.map(v => v.json).join(',');
     for (const p of room.players.values()) {
-      if (p.ws.readyState === p.ws.OPEN) p.ws.send(snapshot);
+      if (p.ws.readyState !== p.ws.OPEN) continue;
+      const monstersJson = allMonstersJson ?? monsterViews
+        .filter(v => Math.abs(v.m.x - p.x) <= SNAPSHOT_VIEW_HALF_W && Math.abs(v.m.y - p.y) <= SNAPSHOT_VIEW_HALF_H)
+        .map(v => v.json).join(',');
+      p.ws.send(`{"type":"state","players":${playersJson},"monsters":[${monstersJson}],"hazards":${hazardsJson}}`);
     }
   }
 }
@@ -2262,18 +2280,44 @@ const MIME_TYPES = {
   '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.md': 'text/plain; charset=utf-8',
 };
+// 전송량 절약: 배경음악 등 에셋은 브라우저가 7일간 캐시, html/js는 매번 확인하되 안 바뀌었으면 304로 본문 생략,
+// 텍스트 파일은 gzip 압축(압축본은 메모리에 캐시)
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.md', '.svg']);
+const gzipCache = new Map();
 function serveStatic(req, res) {
   const reqPath = decodeURIComponent((req.url || '/').split('?')[0]);
   const filePath = path.join(CLIENT_DIR, reqPath === '/' ? 'index.html' : reqPath);
   if (!filePath.startsWith(CLIENT_DIR)) { res.writeHead(403); res.end('Forbidden'); return; }
-  fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream' });
-    res.end(data);
+  fs.stat(filePath, (statErr, st) => {
+    if (statErr || !st.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    const ext = path.extname(filePath).toLowerCase();
+    const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    const headers = {
+      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+      'Cache-Control': reqPath.startsWith('/assets/') ? 'public, max-age=604800' : 'no-cache',
+      ETag: etag,
+    };
+    if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); res.end(); return; }
+    fs.readFile(filePath, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      if (COMPRESSIBLE.has(ext) && /gzip/.test(req.headers['accept-encoding'] || '')) {
+        let cached = gzipCache.get(filePath);
+        if (!cached || cached.etag !== etag) { cached = { etag, body: zlib.gzipSync(data) }; gzipCache.set(filePath, cached); }
+        res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' });
+        res.end(cached.body);
+        return;
+      }
+      res.writeHead(200, headers);
+      res.end(data);
+    });
   });
 }
 const httpServer = http.createServer(serveStatic);
-const wss = new WebSocketServer({ server: httpServer });
+// 스냅샷 JSON은 압축률이 높아서(반복되는 키 이름) 웹소켓 압축으로 전송량을 크게 줄임
+const wss = new WebSocketServer({
+  server: httpServer,
+  perMessageDeflate: { zlibDeflateOptions: { level: 3, memLevel: 7 }, serverMaxWindowBits: 13, threshold: 256 },
+});
 httpServer.listen(PORT, () => console.log(`PixelRealm listening on http://localhost:${PORT} (client + ws 같이 서빙)`));
 
 wss.on('connection', ws => {
