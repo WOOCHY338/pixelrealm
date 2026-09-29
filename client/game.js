@@ -296,20 +296,24 @@ function playHurtSound() { playTone(140, 60, 140, 0.25, 'sawtooth'); }
 
 // ── 지역별 배경음악 — 저작권 없는(CC0) 실제 음원 파일을 지역마다 다르게 재생, 크로스페이드로 전환 ──
 // 출처는 assets/music/CREDITS.md 참고 (전부 OpenGameArt.org, CC0 Public Domain)
+// 1MB 넘는 음원은 Bonto 업로드 한도에 걸려서, 로컬 개발 서버가 아니면 GitHub 공개 저장소를 jsDelivr CDN으로 받아 재생
+const MUSIC_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'assets/music/'
+  : 'https://cdn.jsdelivr.net/gh/WOOCHY338/pixelrealm@master/client/assets/music/';
 const MUSIC_FILES = {
-  capital: 'assets/music/capital.mp3',
-  frontier: 'assets/music/frontier.mp3',
-  field1: 'assets/music/field1.ogg',
-  field2: 'assets/music/field2.mp3',
-  field3: 'assets/music/field3.ogg',
-  field4: 'assets/music/field4.ogg',
-  field5: 'assets/music/field5.mp3',
-  field6: 'assets/music/field6.ogg',
-  field7: 'assets/music/field7.mp3',
-  village: 'assets/music/village.ogg',
-  greenforest: 'assets/music/greenforest.ogg',
-  watertemple: 'assets/music/watertemple.ogg',
-  raid: 'assets/music/raid.mp3',
+  capital: MUSIC_BASE + 'capital.mp3',
+  frontier: MUSIC_BASE + 'frontier.mp3',
+  field1: MUSIC_BASE + 'field1.ogg',
+  field2: MUSIC_BASE + 'field2.mp3',
+  field3: MUSIC_BASE + 'field3.ogg',
+  field4: MUSIC_BASE + 'field4.ogg',
+  field5: MUSIC_BASE + 'field5.mp3',
+  field6: MUSIC_BASE + 'field6.ogg',
+  field7: MUSIC_BASE + 'field7.mp3',
+  village: MUSIC_BASE + 'village.ogg',
+  greenforest: MUSIC_BASE + 'greenforest.ogg',
+  watertemple: MUSIC_BASE + 'watertemple.ogg',
+  raid: MUSIC_BASE + 'raid.mp3',
 };
 const MUSIC_VOLUME = 0.32;
 const MUSIC_FADE_MS = 900;
