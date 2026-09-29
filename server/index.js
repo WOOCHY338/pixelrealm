@@ -930,7 +930,7 @@ function spawnBoss(bossTypeKey) {
   const t = BOSS_TYPES[bossTypeKey];
   return {
     id: nextMonsterId++, kind: bossTypeKey, name: t.name, isBoss: true, weakness: t.weakness,
-    x: RAID_WORLD.w / 2, y: RAID_WORLD.h / 2, hp: t.hp, maxHp: t.hp, atk: t.atk, exp: t.exp, r: t.r,
+    x: RAID_WORLD.w / 2, y: RAID_WORLD.h / 2, hp: t.hp, maxHp: t.hp, atk: Math.round(t.atk * BOSS_DAMAGE_SCALE), exp: t.exp, r: t.r,
     chaseSpeed: t.chaseSpeed, wanderSpeed: 0, aggroRange: t.aggroRange, deaggroRange: t.deaggroRange,
     mode: 'wander', targetId: null, lastAttackAt: 0, stunUntil: 0,
     wanderDir: { x: 0, y: 0 }, wanderUntil: 0,
@@ -1194,6 +1194,11 @@ function dealMonsterContactDamage(room, m, target, dx, dy, dist) {
 let nextHazardId = 1;
 const BOSS_ENRAGE_HP_RATIO = 0.5;
 const BOSS_RETARGET_MS = 6000;
+// v3.6.1 난이도 완화 — 공격이 너무 몰아쳐서 파티로도 어렵다는 피드백: 피해·공격 빈도·분노 강화폭을 낮춤
+const BOSS_DAMAGE_SCALE = 0.8;   // 위험 지대·접촉 피해 배율
+const BOSS_GAP_SCALE = 1.4;      // 공격 사이 쉬는 시간 배율
+const BOSS_ENRAGE_GAP = 0.7;     // 분노 시 쉬는 시간(평소 대비)
+const BOSS_ENRAGE_DAMAGE = 1.15; // 분노 시 위험 지대 피해 배율
 
 function arenaClamp(x, y, pad = 40) {
   return { x: Math.max(pad, Math.min(RAID_WORLD.w - pad, x)), y: Math.max(pad, Math.min(RAID_WORLD.h - pad, y)) };
@@ -1216,7 +1221,7 @@ function addHazard(room, boss, h) {
     followId: null, followUntilMs: 0, anchor: null,
     ...h,
   };
-  if (boss.special.enraged) hz.dmg = Math.round(hz.dmg * 1.25);
+  hz.dmg = Math.round(hz.dmg * BOSS_DAMAGE_SCALE * (boss.special.enraged ? BOSS_ENRAGE_DAMAGE : 1));
   hz.id = nextHazardId++;
   hz.bornAt = now;
   hz.activeAt = now + hz.warnMs;
@@ -1315,7 +1320,7 @@ const BOSS_ATTACKS = {
       for (let i = 0; i < waves; i++) {
         later(boss, i * 450, () => {
           for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 55, warnMs: 800, dmg: 20, slowMs: 1500 });
-          for (let k = 0; k < (enraged ? 5 : 3); k++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 55, warnMs: 900, dmg: 20, slowMs: 1500 }); }
+          for (let k = 0; k < (enraged ? 3 : 2); k++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 55, warnMs: 900, dmg: 20, slowMs: 1500 }); }
         });
       }
       return 600;
@@ -1391,7 +1396,7 @@ const BOSS_ATTACKS = {
   emberRain: {
     name: '불씨 비',
     run({ room, boss, enraged }) {
-      const n = enraged ? 18 : 12;
+      const n = enraged ? 13 : 9;
       for (let i = 0; i < n; i++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 48, warnMs: 700 + i * 80, dmg: 18, knock: 30 }); }
       for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 60, warnMs: 900, dmg: 22, knock: 40 });
       return 500;
@@ -1489,7 +1494,7 @@ const BOSS_ATTACKS = {
   sonicBurst: {
     name: '초음파 탄막',
     run({ room, boss, enraged }) {
-      const waves = enraged ? 3 : 2, n = enraged ? 20 : 14;
+      const waves = enraged ? 3 : 2, n = enraged ? 16 : 12;
       castWarn(room, boss, 500);
       for (let i = 0; i < waves; i++) {
         later(boss, 500 + i * 450, () => {
@@ -1622,8 +1627,8 @@ const BOSS_ATTACKS = {
       for (let i = 0; i < waves; i++) {
         later(boss, i * 500, () => {
           for (const p of bossPlayers(room)) {
-            for (let k = 0; k < 2; k++) {
-              // 한 발은 지금 위치, 한 발은 이동 방향 앞쪽(예측 사격)
+            // 한 발은 지금 위치, 분노 시 한 발 더 이동 방향 앞쪽(예측 사격)
+            for (let k = 0; k < (enraged ? 2 : 1); k++) {
               const lead = k === 0 ? 0 : 0.9;
               const a = Math.random() * Math.PI * 2, off = Math.random() * 60;
               addHazard(room, boss, { x: p.x + (p.vx || 0) * lead + Math.cos(a) * off, y: p.y + (p.vy || 0) * lead + Math.sin(a) * off, r: 65, warnMs: 1200, dmg: 26, knock: 70, stunMs: 250 });
@@ -1684,7 +1689,7 @@ const BOSS_ATTACKS = {
   natureWrath: {
     name: '대자연의 분노',
     run({ room, boss, enraged }) {
-      const n = enraged ? 22 : 14;
+      const n = enraged ? 15 : 10;
       for (let i = 0; i < n; i++) { const pt = randomArenaPoint(); addHazard(room, boss, { x: pt.x, y: pt.y, r: 60, warnMs: 1000 + (i % 3) * 250, dmg: 22, knock: 40 }); }
       for (const p of bossPlayers(room)) addHazard(room, boss, { x: p.x, y: p.y, r: 60, warnMs: 1000, dmg: 22, knock: 40 });
       return 600;
@@ -1783,7 +1788,7 @@ function updateBoss(room, boss, dt, now) {
     const attack = BOSS_ATTACKS[key];
     const busy = attack.run({ room, boss, enraged: s.enraged, target });
     s.busyUntil = now + busy;
-    s.nextAt = s.busyUntil + (s.enraged ? t.gapMs * 0.55 : t.gapMs);
+    s.nextAt = s.busyUntil + t.gapMs * BOSS_GAP_SCALE * (s.enraged ? BOSS_ENRAGE_GAP : 1);
     s.phase = 'telegraph';
     broadcastRoom(room, { type: 'boss_cast', id: boss.id, text: attack.name, x: round1(boss.x), y: round1(boss.y) });
   } else {
