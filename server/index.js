@@ -244,7 +244,7 @@ function grantMarketItem(player, listing) {
     if (existing) existing.qty += listing.qty;
     else player.inventory.push({ id: 'p' + (nextItemId++), kind: 'potion', key: listing.key, name: listing.name, heal: listing.heal, qty: listing.qty });
   } else if (listing.kind === 'weapon') {
-    player.inventory.push({ id: 'w' + (nextItemId++), kind: 'weapon', key: listing.key, name: listing.name, atkBonus: listing.atkBonus, durability: listing.durability, maxDurability: listing.maxDurability, element: listing.element, enhanceLevel: listing.enhanceLevel });
+    player.inventory.push({ id: 'w' + (nextItemId++), kind: 'weapon', key: listing.key, name: listing.name, atkBonus: listing.atkBonus, element: listing.element, enhanceLevel: listing.enhanceLevel });
   }
 }
 function sendMarketData(player) {
@@ -269,6 +269,8 @@ function recomputeDerivedStats(player) {
 // ── 레벨업 ──────────────────────────────────────────────
 // 1→2: 40, 5→6: 525, 10→11: 1592 — 레벨이 오를수록 가파르게 증가
 function requiredExp(level) { return Math.round(40 * Math.pow(level, 1.6)); }
+// 레벨 L에 도달할 때 받는 스텟 포인트 — Lv.2: 1, Lv.3: 2, Lv.4: 3 … 레벨마다 1씩 증가
+function statPointsForLevel(level) { return level - 1; }
 
 function applyLevelUps(player) {
   const startLevel = player.level;
@@ -276,7 +278,7 @@ function applyLevelUps(player) {
   while (player.exp >= required) {
     player.exp -= required;
     player.level++;
-    player.user.statPoints = (player.user.statPoints || 0) + 1;
+    player.user.statPoints = (player.user.statPoints || 0) + statPointsForLevel(player.level);
     required = requiredExp(player.level);
   }
   if (player.level > startLevel) {
@@ -789,35 +791,35 @@ function round1(v) { return Math.round(v * 10) / 10; }
 
 // ── 아이템 / 경제 ───────────────────────────────────────
 const WEAPON_CATALOG = {
-  silverSword: { name: '실버 소드', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
-  goldSword: { name: '골드 소드', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
-  flameSword: { name: '화염검', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
-  frostSword: { name: '빙결검', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
-  steelSword: { name: '강철검', atkBonus: 4, maxDurability: 50, element: 'none', price: 120 },
-  diamondSword: { name: '다이아 소드', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
-  radiantSword: { name: '레디언트 소드', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
-  windBreathSword: { name: '바람의 숨결', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
-  masterySword: { name: '마스터리 소드', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
+  silverSword: { name: '실버 소드', atkBonus: 2, element: 'none', price: 50 },
+  goldSword: { name: '골드 소드', atkBonus: 4, element: 'none', price: 100 },
+  flameSword: { name: '화염검', atkBonus: 2, element: 'fire', price: 80 },
+  frostSword: { name: '빙결검', atkBonus: 2, element: 'ice', price: 80 },
+  steelSword: { name: '강철검', atkBonus: 4, element: 'none', price: 120 },
+  diamondSword: { name: '다이아 소드', atkBonus: 6, element: 'none', price: 150 },
+  radiantSword: { name: '레디언트 소드', atkBonus: 9, element: 'none', price: 250 },
+  windBreathSword: { name: '바람의 숨결', atkBonus: 12, element: 'none', price: 350 },
+  masterySword: { name: '마스터리 소드', atkBonus: 16, element: 'none', price: 500 },
 
   // 궁수 전용 — 용사 검과 동일한 등급별 스탯, 강철 등급 없이 8종 + 언덕의 전설(바람의 숨결 자리)
-  silverBow: { name: '실버 활', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
-  goldBow: { name: '골드 활', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
-  flameBow: { name: '화염 활', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
-  frostBow: { name: '빙결 활', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
-  diamondBow: { name: '다이아 활', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
-  radiantBow: { name: '레디언트 활', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
-  hillLegendBow: { name: '언덕의 전설 활', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
-  masteryBow: { name: '마스터리 활', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
+  silverBow: { name: '실버 활', atkBonus: 2, element: 'none', price: 50 },
+  goldBow: { name: '골드 활', atkBonus: 4, element: 'none', price: 100 },
+  flameBow: { name: '화염 활', atkBonus: 2, element: 'fire', price: 80 },
+  frostBow: { name: '빙결 활', atkBonus: 2, element: 'ice', price: 80 },
+  diamondBow: { name: '다이아 활', atkBonus: 6, element: 'none', price: 150 },
+  radiantBow: { name: '레디언트 활', atkBonus: 9, element: 'none', price: 250 },
+  hillLegendBow: { name: '언덕의 전설 활', atkBonus: 12, element: 'none', price: 350 },
+  masteryBow: { name: '마스터리 활', atkBonus: 16, element: 'none', price: 500 },
 
   // 힐러 전용 — 강철 등급 자리에 레전더리 마법봉, 마스터리 등급 없이 바람의 마법봉이 최고 등급
-  silverWand: { name: '실버 마법봉', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
-  goldWand: { name: '골드 마법봉', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
-  flameWand: { name: '화염 마법봉', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
-  frostWand: { name: '빙결 마법봉', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
-  legendaryWand: { name: '레전더리 마법봉', atkBonus: 4, maxDurability: 50, element: 'none', price: 120 },
-  diamondWand: { name: '다이아 마법봉', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
-  radiantWand: { name: '레디언트 마법봉', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
-  windBreathWand: { name: '바람의 마법봉', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
+  silverWand: { name: '실버 마법봉', atkBonus: 2, element: 'none', price: 50 },
+  goldWand: { name: '골드 마법봉', atkBonus: 4, element: 'none', price: 100 },
+  flameWand: { name: '화염 마법봉', atkBonus: 2, element: 'fire', price: 80 },
+  frostWand: { name: '빙결 마법봉', atkBonus: 2, element: 'ice', price: 80 },
+  legendaryWand: { name: '레전더리 마법봉', atkBonus: 4, element: 'none', price: 120 },
+  diamondWand: { name: '다이아 마법봉', atkBonus: 6, element: 'none', price: 150 },
+  radiantWand: { name: '레디언트 마법봉', atkBonus: 9, element: 'none', price: 250 },
+  windBreathWand: { name: '바람의 마법봉', atkBonus: 12, element: 'none', price: 350 },
 };
 // 직업별로 상점에서 살 수 있는 무기 목록 — 용사는 기존 그대로, 궁수/힐러는 각자 전용 무기 계열
 const CLASS_WEAPON_KEYS = {
@@ -828,7 +830,6 @@ const CLASS_WEAPON_KEYS = {
 const POTION_CATALOG = {
   healthPotion: { name: '체력 물약', heal: 20, price: 15 },
 };
-const DURABILITY_UPGRADE_AMOUNT = 8; // 대장간에서 내구도 강화 시 최대 내구도(+현재 내구도)에 더해지는 양
 const MAP_ITEM_KEY = 'worldMap';
 const MAP_PRICE = 150;
 function shopCatalogFor(classKey) {
@@ -836,7 +837,7 @@ function shopCatalogFor(classKey) {
   return [
     ...weaponKeys.map(key => {
       const w = WEAPON_CATALOG[key];
-      return { key, kind: 'weapon', name: w.name, price: w.price, atkBonus: w.atkBonus, maxDurability: w.maxDurability, element: w.element };
+      return { key, kind: 'weapon', name: w.name, price: w.price, atkBonus: w.atkBonus, element: w.element };
     }),
     ...Object.entries(POTION_CATALOG).map(([key, p]) => ({ key, kind: 'potion', name: p.name, price: p.price, heal: p.heal })),
     { key: MAP_ITEM_KEY, kind: 'map', name: '세계 지도', price: MAP_PRICE },
@@ -845,19 +846,7 @@ function shopCatalogFor(classKey) {
 
 let nextItemId = 1;
 function makeStarterWeapon() {
-  return { id: 'w' + (nextItemId++), kind: 'weapon', key: 'starter', name: '낡은 검', atkBonus: 0, durability: 30, maxDurability: 30, element: 'none', enhanceLevel: 0 };
-}
-
-// 내구도가 0이 되면 무기가 그대로 부서져 사라지고, 맨손 대신 기본 무기(낡은 검)로 교체됨
-function breakWeaponIfDepleted(player) {
-  if (player.weapon.durability > 0) return;
-  const brokenName = player.weapon.name;
-  const starter = makeStarterWeapon();
-  player.weapon = starter;
-  player.user.weapon = starter;
-  saveUsers();
-  sendInventory(player);
-  sendTo(player, { type: 'weapon_broken', brokenName, weapon: starter });
+  return { id: 'w' + (nextItemId++), kind: 'weapon', key: 'starter', name: '낡은 검', atkBonus: 0, element: 'none', enhanceLevel: 0 };
 }
 
 function sendInventory(player) {
@@ -1978,12 +1967,7 @@ function handleMeleeAttack(player, room, now) {
     hits.push(applyHitToMonster(room, player, m, dmg, now));
   }
   if (hits.length) {
-    weaponUsed.durability = Math.max(0, weaponUsed.durability - 1);
-    sendTo(player, {
-      type: 'attack_result', hits, totalExp: player.exp, level: player.level,
-      weaponDurability: weaponUsed.durability, weaponMaxDurability: weaponUsed.maxDurability,
-    });
-    breakWeaponIfDepleted(player);
+    sendTo(player, { type: 'attack_result', hits, totalExp: player.exp, level: player.level });
   }
 }
 
@@ -1992,7 +1976,6 @@ function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
   const weapon = player.weapon;
   let dmg = roll(player.atk + (weapon.atkBonus || 0) + (player.magic || 0));
   if (opts.dmgMult) dmg = Math.round(dmg * opts.dmgMult);
-  weapon.durability = Math.max(0, weapon.durability - 1);
   const angle = player.facing + angleOffset;
   const dirX = Math.cos(angle), dirY = Math.sin(angle);
   const proj = {
@@ -2007,8 +1990,7 @@ function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
     type: 'projectile_spawn', id: proj.id, x: proj.x, y: proj.y, vx: proj.vx, vy: proj.vy,
     ownerId: player.id, classKey: player.classKey, maxLife: proj.maxLife, tag: opts.tag || null,
   });
-  sendTo(player, { type: 'attack_result', hits: [], totalExp: player.exp, level: player.level, weaponDurability: weapon.durability, weaponMaxDurability: weapon.maxDurability });
-  breakWeaponIfDepleted(player);
+  sendTo(player, { type: 'attack_result', hits: [], totalExp: player.exp, level: player.level });
 }
 
 function updateProjectiles(room, dt, now) {
@@ -2026,7 +2008,7 @@ function updateProjectiles(room, dt, now) {
       const owner = [...room.players.values()].find(p => p.id === proj.ownerId);
       if (owner) {
         const hit = applyHitToMonster(room, owner, hitMonster, proj.dmg, now);
-        sendTo(owner, { type: 'attack_result', hits: [hit], totalExp: owner.exp, level: owner.level, weaponDurability: owner.weapon.durability, weaponMaxDurability: owner.weapon.maxDurability });
+        sendTo(owner, { type: 'attack_result', hits: [hit], totalExp: owner.exp, level: owner.level });
       }
       if (proj.pierce) {
         proj.hitIds.add(hitMonster.id);
@@ -2497,8 +2479,7 @@ wss.on('connection', ws => {
         player.gold -= wcat.price;
         player.inventory.push({
           id: 'w' + (nextItemId++), kind: 'weapon', key: msg.itemKey, name: wcat.name,
-          atkBonus: wcat.atkBonus, durability: wcat.maxDurability, maxDurability: wcat.maxDurability,
-          element: wcat.element, enhanceLevel: 0,
+          atkBonus: wcat.atkBonus, element: wcat.element, enhanceLevel: 0,
         });
         syncGold(player);
         sendInventory(player);
@@ -2548,23 +2529,6 @@ wss.on('connection', ws => {
       player.weapon.enhanceLevel = (player.weapon.enhanceLevel || 0) + 1;
       syncGold(player);
       sendInventory(player);
-    } else if (msg.type === 'blacksmith_repair') {
-      const missing = player.weapon.maxDurability - player.weapon.durability;
-      if (missing <= 0) return;
-      const cost = missing * 2;
-      if (player.gold < cost) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
-      player.gold -= cost;
-      player.weapon.durability = player.weapon.maxDurability;
-      syncGold(player);
-      sendInventory(player);
-    } else if (msg.type === 'blacksmith_upgrade_durability') {
-      const cost = Math.round(25 + player.weapon.maxDurability * 1.2);
-      if (player.gold < cost) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
-      player.gold -= cost;
-      player.weapon.maxDurability += DURABILITY_UPGRADE_AMOUNT;
-      player.weapon.durability += DURABILITY_UPGRADE_AMOUNT;
-      syncGold(player);
-      sendInventory(player);
     } else if (msg.type === 'sell_item') {
       const room = rooms.get(player.roomId);
       if (!room) return;
@@ -2604,7 +2568,7 @@ wss.on('connection', ws => {
           if (item.qty <= 0) player.inventory.splice(idx, 1);
         } else if (item.kind === 'weapon') {
           listQty = 1;
-          listedItem = { kind: 'weapon', key: item.key, name: item.name, atkBonus: item.atkBonus, durability: item.durability, maxDurability: item.maxDurability, element: item.element, enhanceLevel: item.enhanceLevel };
+          listedItem = { kind: 'weapon', key: item.key, name: item.name, atkBonus: item.atkBonus, element: item.element, enhanceLevel: item.enhanceLevel };
           player.inventory.splice(idx, 1);
         } else {
           return;

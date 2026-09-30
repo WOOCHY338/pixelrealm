@@ -39,8 +39,6 @@ const blacksmithGoldEl = document.getElementById('blacksmithGold');
 const blacksmithWeaponNameEl = document.getElementById('blacksmithWeaponName');
 const blacksmithWeaponStatEl = document.getElementById('blacksmithWeaponStat');
 const blacksmithEnhanceBtn = document.getElementById('blacksmithEnhanceBtn');
-const blacksmithRepairBtn = document.getElementById('blacksmithRepairBtn');
-const blacksmithUpgradeDurabilityBtn = document.getElementById('blacksmithUpgradeDurabilityBtn');
 const inventoryPanelEl = document.getElementById('inventoryPanel');
 const invListEl = document.getElementById('invList');
 const invGoldEl = document.getElementById('invGold');
@@ -154,7 +152,7 @@ let lastMarketListings = [];
 
 const ELEMENT_LABEL = { none: '무속성', fire: '화속성', ice: '빙속성' };
 let selfGold = 0;
-let selfWeapon = { name: '낡은 검', atkBonus: 0, durability: 30, maxDurability: 30, element: 'none' };
+let selfWeapon = { name: '낡은 검', atkBonus: 0, element: 'none' };
 let selfInventory = [];
 let showInventory = false;
 
@@ -759,8 +757,6 @@ document.querySelectorAll('.class-card').forEach(card => {
 document.getElementById('shopCloseBtn').addEventListener('click', () => shopPanelEl.classList.add('hidden'));
 document.getElementById('blacksmithCloseBtn').addEventListener('click', () => blacksmithPanelEl.classList.add('hidden'));
 blacksmithEnhanceBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'blacksmith_enhance' })));
-blacksmithRepairBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'blacksmith_repair' })));
-blacksmithUpgradeDurabilityBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'blacksmith_upgrade_durability' })));
 
 let lastShopCatalog = null;
 
@@ -772,7 +768,7 @@ function renderShopPanel(catalog, gold) {
     const row = document.createElement('div');
     row.className = 'item-row';
     const sub = item.kind === 'weapon'
-      ? `공격력+${item.atkBonus} · 내구도${item.maxDurability} · ${ELEMENT_LABEL[item.element]}`
+      ? `공격력+${item.atkBonus} · ${ELEMENT_LABEL[item.element]}`
       : item.kind === 'map' ? '미니맵 · 전체지도(M) 잠금 해제'
       : `HP +${item.heal}`;
     row.innerHTML = `<div class="desc"><div class="name">${item.name}</div><div class="sub">${sub} · ${item.price}G</div></div>`;
@@ -817,16 +813,10 @@ function renderBlacksmithPanel(weapon, gold) {
   blacksmithPanelEl.classList.remove('hidden');
   blacksmithGoldEl.textContent = gold;
   blacksmithWeaponNameEl.textContent = `${weapon.name} (+${weapon.atkBonus}, ${ELEMENT_LABEL[weapon.element]})`;
-  blacksmithWeaponStatEl.textContent = `내구도 ${weapon.durability} / ${weapon.maxDurability}`;
+  blacksmithWeaponStatEl.textContent = `강화 단계 +${weapon.enhanceLevel || 0}`;
   const enhanceCost = 30 + (weapon.enhanceLevel || 0) * 20;
-  const repairCost = (weapon.maxDurability - weapon.durability) * 2;
-  const durabilityUpgradeCost = Math.round(25 + weapon.maxDurability * 1.2);
   blacksmithEnhanceBtn.textContent = `강화 (${enhanceCost}G)`;
   blacksmithEnhanceBtn.disabled = gold < enhanceCost;
-  blacksmithRepairBtn.textContent = repairCost > 0 ? `내구도 수리 (${repairCost}G)` : '내구도 최대';
-  blacksmithRepairBtn.disabled = repairCost <= 0 || gold < repairCost;
-  blacksmithUpgradeDurabilityBtn.textContent = `내구도 강화 +8 (${durabilityUpgradeCost}G)`;
-  blacksmithUpgradeDurabilityBtn.disabled = gold < durabilityUpgradeCost;
 }
 
 function renderStatPanel() {
@@ -1050,7 +1040,7 @@ function renderInventoryPanel() {
   invListEl.innerHTML = '';
   const weaponRow = document.createElement('div');
   weaponRow.className = 'item-row';
-  weaponRow.innerHTML = `<div class="desc"><div class="name">${selfWeapon.name} (장착중)</div><div class="sub">공격력+${selfWeapon.atkBonus} · 내구도 ${selfWeapon.durability}/${selfWeapon.maxDurability} · ${ELEMENT_LABEL[selfWeapon.element]}</div></div>`;
+  weaponRow.innerHTML = `<div class="desc"><div class="name">${selfWeapon.name} (장착중)</div><div class="sub">공격력+${selfWeapon.atkBonus} · ${ELEMENT_LABEL[selfWeapon.element]}</div></div>`;
   invListEl.appendChild(weaponRow);
   if (!selfInventory.length) {
     const empty = document.createElement('div');
@@ -1063,7 +1053,7 @@ function renderInventoryPanel() {
     const row = document.createElement('div');
     row.className = 'item-row';
     if (item.kind === 'weapon') {
-      row.innerHTML = `<div class="desc"><div class="name">${item.name}</div><div class="sub">공격력+${item.atkBonus} · 내구도 ${item.durability}/${item.maxDurability} · ${ELEMENT_LABEL[item.element]}</div></div>`;
+      row.innerHTML = `<div class="desc"><div class="name">${item.name}</div><div class="sub">공격력+${item.atkBonus} · ${ELEMENT_LABEL[item.element]}</div></div>`;
       const btn = document.createElement('button');
       btn.textContent = '장착';
       btn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'equip_weapon', itemId: item.id })));
@@ -1267,7 +1257,6 @@ ws.addEventListener('message', ev => {
       playHitSound(anyKill);
     }
     if (typeof msg.totalExp === 'number') selfExp = msg.totalExp;
-    if (typeof msg.weaponDurability === 'number') { selfWeapon.durability = msg.weaponDurability; selfWeapon.maxDurability = msg.weaponMaxDurability; }
   } else if (msg.type === 'player_hit') {
     const self = players.get(selfId);
     if (self) {
@@ -1300,7 +1289,13 @@ ws.addEventListener('message', ev => {
     levelReadout.textContent = selfLevel;
     const self = players.get(selfId);
     if (self) { self.hp = msg.hp; self.maxHp = msg.maxHp; }
-    showBanner(`레벨 업! Lv.${msg.level}`);
+    const gainedPoints = typeof msg.statPoints === 'number' ? msg.statPoints - myStatPoints : 0;
+    if (typeof msg.statPoints === 'number') {
+      myStatPoints = msg.statPoints;
+      statPointsBtn.textContent = `스텟 (${myStatPoints})`;
+      if (!statPanelEl.classList.contains('hidden')) renderStatPanel();
+    }
+    showBanner(gainedPoints > 0 ? `레벨 업! Lv.${msg.level} · 스텟 포인트 +${gainedPoints}` : `레벨 업! Lv.${msg.level}`);
   } else if (msg.type === 'raid_prompt') {
     if (msg.show) { raidPromptEl.classList.remove('hidden'); raidPromptEl.dataset.zoneKey = msg.zoneKey; }
     else raidPromptEl.classList.add('hidden');
@@ -1349,8 +1344,6 @@ ws.addEventListener('message', ev => {
     showBanner(`${msg.name}이(가) 분노했습니다! 패턴이 강해집니다`);
   } else if (msg.type === 'raid_win') {
     showBanner(`${msg.bossName} 처치! +${msg.exp} EXP · +${msg.goldGain}G · ${msg.materialName} 획득`);
-  } else if (msg.type === 'weapon_broken') {
-    showBanner(`${msg.brokenName}이(가) 내구도 소진으로 부서졌습니다 — ${msg.weapon.name}(으)로 교체됨`);
   } else if (msg.type === 'inventory') {
     selfGold = msg.gold;
     selfWeapon = msg.weapon;
@@ -3126,7 +3119,7 @@ function loop(now) {
   if (self) hpReadout.textContent = `${Math.round(self.hp)} / ${self.maxHp}`;
   expReadout.textContent = selfExp;
   goldReadout.textContent = selfGold;
-  weaponReadout.textContent = `${selfWeapon.name} (${selfWeapon.durability}/${selfWeapon.maxDurability})`;
+  weaponReadout.textContent = selfWeapon.enhanceLevel ? `${selfWeapon.name} +${selfWeapon.enhanceLevel}` : selfWeapon.name;
   if (currentClass) {
     [0, 1].forEach(slot => {
       const el = slot === 0 ? skillReadout : skillReadout2;
