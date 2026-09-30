@@ -194,6 +194,30 @@ const SPEED_RESET_TARGETS = new Set(['ace5870f96704d6f']);
   }
   if (count) { saveUsers(); setTimeout(saveUsers, 30000); setTimeout(saveUsers, 90000); }
 }
+// v3.7 레벨업 스텟 소급 — 레벨업 보상이 "레벨마다 1개"에서 "Lv.L 도달 시 L-1개"로 바뀜.
+// v3.5 초기화 이후 Lv.1부터 다시 올린 레벨만 계산: 새 방식 합계 L(L-1)/2 - 기존 L-1 = (L-1)(L-2)/2 추가 지급(계정당 한 번).
+// 기록 { level, bonus, at }은 quests._statRetroV37에 남김 (신규 계정은 true — 대상 아님)
+const STAT_RETRO_V37 = '_statRetroV37';
+{
+  let count = 0, total = 0;
+  for (const u of users.values()) {
+    if (!u.quests) u.quests = {};
+    if (u.quests[STAT_RETRO_V37]) continue;
+    const level = u.level || 1;
+    const bonus = (level - 1) * (level - 2) / 2;
+    u.quests[STAT_RETRO_V37] = { level, bonus, at: '2026-09-30' };
+    if (bonus > 0) {
+      u.statPoints = (u.statPoints || 0) + bonus;
+      console.log(`[v3.7 스텟 소급] ${u.username}(${u.nickname}) Lv.${level} → 스텟포인트 +${bonus}`);
+      total += bonus;
+    }
+    count++;
+  }
+  if (count) {
+    saveUsers(); setTimeout(saveUsers, 30000); setTimeout(saveUsers, 90000);
+    console.log(`[v3.7 스텟 소급] ${count}개 계정 처리, 총 ${total}포인트 지급`);
+  }
+}
 function levelResetV35Record(user) {
   const rec = user.quests && user.quests[LEVEL_RESET_V35];
   return rec && typeof rec === 'object' ? rec : null;
@@ -211,7 +235,7 @@ function makeNewUser(username, password, nickname) {
     weapon: makeStarterWeapon(), inventory: [],
     ownedSkills: [], equippedSkills: [null, null],
     guildId: null, hasMap: false, hasSeenTutorial: false,
-    quests: { [LEVEL_RESET_V35]: true }, // 신규 계정은 v3.5 레벨 초기화 대상이 아님
+    quests: { [LEVEL_RESET_V35]: true, [STAT_RETRO_V37]: true }, // 신규 계정은 v3.5 레벨 초기화·v3.7 스텟 소급 대상이 아님
   };
 }
 
