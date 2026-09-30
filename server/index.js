@@ -917,9 +917,10 @@ function spawnEliteMonster(room, zoneKey) {
 
 function spawnBoss(bossTypeKey) {
   const t = BOSS_TYPES[bossTypeKey];
+  const hp = Math.round(t.hp * BOSS_HP_SCALE);
   return {
     id: nextMonsterId++, kind: bossTypeKey, name: t.name, isBoss: true, weakness: t.weakness,
-    x: RAID_WORLD.w / 2, y: RAID_WORLD.h / 2, hp: t.hp, maxHp: t.hp, atk: Math.round(t.atk * BOSS_DAMAGE_SCALE), exp: t.exp, r: t.r,
+    x: RAID_WORLD.w / 2, y: RAID_WORLD.h / 2, hp, maxHp: hp, atk: Math.round(t.atk * BOSS_DAMAGE_SCALE), exp: t.exp, r: t.r,
     chaseSpeed: t.chaseSpeed, wanderSpeed: 0, aggroRange: t.aggroRange, deaggroRange: t.deaggroRange,
     mode: 'wander', targetId: null, lastAttackAt: 0, stunUntil: 0,
     wanderDir: { x: 0, y: 0 }, wanderUntil: 0,
@@ -1184,10 +1185,14 @@ let nextHazardId = 1;
 const BOSS_ENRAGE_HP_RATIO = 0.5;
 const BOSS_RETARGET_MS = 6000;
 // v3.6.1 난이도 완화 — 공격이 너무 몰아쳐서 파티로도 어렵다는 피드백: 피해·공격 빈도·분노 강화폭을 낮춤
-const BOSS_DAMAGE_SCALE = 0.8;   // 위험 지대·접촉 피해 배율
-const BOSS_GAP_SCALE = 1.4;      // 공격 사이 쉬는 시간 배율
-const BOSS_ENRAGE_GAP = 0.7;     // 분노 시 쉬는 시간(평소 대비)
-const BOSS_ENRAGE_DAMAGE = 1.15; // 분노 시 위험 지대 피해 배율
+// v3.7 대폭 하향 — 피해 절반, 쉬는 시간 2배, 체력 40% 감소, 맞았을 때 경직 절반, 분노 강화폭 축소
+const BOSS_DAMAGE_SCALE = 0.5;   // 위험 지대·접촉 피해 배율
+const BOSS_GAP_SCALE = 2.0;      // 공격 사이 쉬는 시간 배율
+const BOSS_HP_SCALE = 0.6;       // 보스 체력 배율
+const BOSS_STUN_SCALE = 0.5;     // 위험 지대에 맞았을 때 경직 시간 배율
+const BOSS_ENRAGE_GAP = 0.85;    // 분노 시 쉬는 시간(평소 대비)
+const BOSS_ENRAGE_DAMAGE = 1.05; // 분노 시 위험 지대 피해 배율
+const BOSS_ENRAGE_SPEED = 1.15;  // 분노 시 이동속도 배율
 
 function arenaClamp(x, y, pad = 40) {
   return { x: Math.max(pad, Math.min(RAID_WORLD.w - pad, x)), y: Math.max(pad, Math.min(RAID_WORLD.h - pad, y)) };
@@ -1211,6 +1216,7 @@ function addHazard(room, boss, h) {
     ...h,
   };
   hz.dmg = Math.round(hz.dmg * BOSS_DAMAGE_SCALE * (boss.special.enraged ? BOSS_ENRAGE_DAMAGE : 1));
+  hz.stunMs = Math.round(hz.stunMs * BOSS_STUN_SCALE);
   hz.id = nextHazardId++;
   hz.bornAt = now;
   hz.activeAt = now + hz.warnMs;
@@ -1784,7 +1790,7 @@ function updateBoss(room, boss, dt, now) {
     s.phase = 'idle';
     const slowMult = (boss.slowUntil && now < boss.slowUntil) ? 0.6 : 1;
     const speedMult = (s.speedUntil && now < s.speedUntil) ? s.speedMult : 1;
-    const speed = t.chaseSpeed * (s.enraged ? 1.3 : 1) * slowMult * speedMult;
+    const speed = t.chaseSpeed * (s.enraged ? BOSS_ENRAGE_SPEED : 1) * slowMult * speedMult;
     const dx = target.x - boss.x, dy = target.y - boss.y;
     const dist = Math.hypot(dx, dy);
     if (dist > boss.r + PLAYER_R + 4) {
