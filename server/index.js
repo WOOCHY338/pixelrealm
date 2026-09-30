@@ -194,6 +194,30 @@ const SPEED_RESET_TARGETS = new Set(['ace5870f96704d6f']);
   }
   if (count) { saveUsers(); setTimeout(saveUsers, 30000); setTimeout(saveUsers, 90000); }
 }
+// v3.7 레벨업 스텟 소급 — 레벨업 보상이 "레벨마다 1개"에서 "Lv.L 도달 시 L-1개"로 바뀜.
+// v3.5 초기화 이후 Lv.1부터 다시 올린 레벨만 계산: 새 방식 합계 L(L-1)/2 - 기존 L-1 = (L-1)(L-2)/2 추가 지급(계정당 한 번).
+// 기록 { level, bonus, at }은 quests._statRetroV37에 남김 (신규 계정은 true — 대상 아님)
+const STAT_RETRO_V37 = '_statRetroV37';
+{
+  let count = 0, total = 0;
+  for (const u of users.values()) {
+    if (!u.quests) u.quests = {};
+    if (u.quests[STAT_RETRO_V37]) continue;
+    const level = u.level || 1;
+    const bonus = (level - 1) * (level - 2) / 2;
+    u.quests[STAT_RETRO_V37] = { level, bonus, at: '2026-09-30' };
+    if (bonus > 0) {
+      u.statPoints = (u.statPoints || 0) + bonus;
+      console.log(`[v3.7 스텟 소급] ${u.username}(${u.nickname}) Lv.${level} → 스텟포인트 +${bonus}`);
+      total += bonus;
+    }
+    count++;
+  }
+  if (count) {
+    saveUsers(); setTimeout(saveUsers, 30000); setTimeout(saveUsers, 90000);
+    console.log(`[v3.7 스텟 소급] ${count}개 계정 처리, 총 ${total}포인트 지급`);
+  }
+}
 function levelResetV35Record(user) {
   const rec = user.quests && user.quests[LEVEL_RESET_V35];
   return rec && typeof rec === 'object' ? rec : null;
@@ -211,7 +235,7 @@ function makeNewUser(username, password, nickname) {
     weapon: makeStarterWeapon(), inventory: [],
     ownedSkills: [], equippedSkills: [null, null],
     guildId: null, hasMap: false, hasSeenTutorial: false,
-    quests: { [LEVEL_RESET_V35]: true }, // 신규 계정은 v3.5 레벨 초기화 대상이 아님
+    quests: { [LEVEL_RESET_V35]: true, [STAT_RETRO_V37]: true }, // 신규 계정은 v3.5 레벨 초기화·v3.7 스텟 소급 대상이 아님
   };
 }
 
@@ -244,7 +268,7 @@ function grantMarketItem(player, listing) {
     if (existing) existing.qty += listing.qty;
     else player.inventory.push({ id: 'p' + (nextItemId++), kind: 'potion', key: listing.key, name: listing.name, heal: listing.heal, qty: listing.qty });
   } else if (listing.kind === 'weapon') {
-    player.inventory.push({ id: 'w' + (nextItemId++), kind: 'weapon', key: listing.key, name: listing.name, atkBonus: listing.atkBonus, durability: listing.durability, maxDurability: listing.maxDurability, element: listing.element, enhanceLevel: listing.enhanceLevel });
+    player.inventory.push({ id: 'w' + (nextItemId++), kind: 'weapon', key: listing.key, name: listing.name, atkBonus: listing.atkBonus, element: listing.element, enhanceLevel: listing.enhanceLevel });
   }
 }
 function sendMarketData(player) {
@@ -269,6 +293,8 @@ function recomputeDerivedStats(player) {
 // ── 레벨업 ──────────────────────────────────────────────
 // 1→2: 40, 5→6: 525, 10→11: 1592 — 레벨이 오를수록 가파르게 증가
 function requiredExp(level) { return Math.round(40 * Math.pow(level, 1.6)); }
+// 레벨 L에 도달할 때 받는 스텟 포인트 — Lv.2: 1, Lv.3: 2, Lv.4: 3 … 레벨마다 1씩 증가
+function statPointsForLevel(level) { return level - 1; }
 
 function applyLevelUps(player) {
   const startLevel = player.level;
@@ -276,7 +302,7 @@ function applyLevelUps(player) {
   while (player.exp >= required) {
     player.exp -= required;
     player.level++;
-    player.user.statPoints = (player.user.statPoints || 0) + 1;
+    player.user.statPoints = (player.user.statPoints || 0) + statPointsForLevel(player.level);
     required = requiredExp(player.level);
   }
   if (player.level > startLevel) {
@@ -789,35 +815,35 @@ function round1(v) { return Math.round(v * 10) / 10; }
 
 // ── 아이템 / 경제 ───────────────────────────────────────
 const WEAPON_CATALOG = {
-  silverSword: { name: '실버 소드', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
-  goldSword: { name: '골드 소드', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
-  flameSword: { name: '화염검', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
-  frostSword: { name: '빙결검', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
-  steelSword: { name: '강철검', atkBonus: 4, maxDurability: 50, element: 'none', price: 120 },
-  diamondSword: { name: '다이아 소드', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
-  radiantSword: { name: '레디언트 소드', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
-  windBreathSword: { name: '바람의 숨결', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
-  masterySword: { name: '마스터리 소드', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
+  silverSword: { name: '실버 소드', atkBonus: 2, element: 'none', price: 50 },
+  goldSword: { name: '골드 소드', atkBonus: 4, element: 'none', price: 100 },
+  flameSword: { name: '화염검', atkBonus: 2, element: 'fire', price: 80 },
+  frostSword: { name: '빙결검', atkBonus: 2, element: 'ice', price: 80 },
+  steelSword: { name: '강철검', atkBonus: 4, element: 'none', price: 120 },
+  diamondSword: { name: '다이아 소드', atkBonus: 6, element: 'none', price: 150 },
+  radiantSword: { name: '레디언트 소드', atkBonus: 9, element: 'none', price: 250 },
+  windBreathSword: { name: '바람의 숨결', atkBonus: 12, element: 'none', price: 350 },
+  masterySword: { name: '마스터리 소드', atkBonus: 16, element: 'none', price: 500 },
 
   // 궁수 전용 — 용사 검과 동일한 등급별 스탯, 강철 등급 없이 8종 + 언덕의 전설(바람의 숨결 자리)
-  silverBow: { name: '실버 활', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
-  goldBow: { name: '골드 활', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
-  flameBow: { name: '화염 활', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
-  frostBow: { name: '빙결 활', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
-  diamondBow: { name: '다이아 활', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
-  radiantBow: { name: '레디언트 활', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
-  hillLegendBow: { name: '언덕의 전설 활', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
-  masteryBow: { name: '마스터리 활', atkBonus: 16, maxDurability: 90, element: 'none', price: 500 },
+  silverBow: { name: '실버 활', atkBonus: 2, element: 'none', price: 50 },
+  goldBow: { name: '골드 활', atkBonus: 4, element: 'none', price: 100 },
+  flameBow: { name: '화염 활', atkBonus: 2, element: 'fire', price: 80 },
+  frostBow: { name: '빙결 활', atkBonus: 2, element: 'ice', price: 80 },
+  diamondBow: { name: '다이아 활', atkBonus: 6, element: 'none', price: 150 },
+  radiantBow: { name: '레디언트 활', atkBonus: 9, element: 'none', price: 250 },
+  hillLegendBow: { name: '언덕의 전설 활', atkBonus: 12, element: 'none', price: 350 },
+  masteryBow: { name: '마스터리 활', atkBonus: 16, element: 'none', price: 500 },
 
   // 힐러 전용 — 강철 등급 자리에 레전더리 마법봉, 마스터리 등급 없이 바람의 마법봉이 최고 등급
-  silverWand: { name: '실버 마법봉', atkBonus: 2, maxDurability: 35, element: 'none', price: 50 },
-  goldWand: { name: '골드 마법봉', atkBonus: 4, maxDurability: 45, element: 'none', price: 100 },
-  flameWand: { name: '화염 마법봉', atkBonus: 2, maxDurability: 40, element: 'fire', price: 80 },
-  frostWand: { name: '빙결 마법봉', atkBonus: 2, maxDurability: 40, element: 'ice', price: 80 },
-  legendaryWand: { name: '레전더리 마법봉', atkBonus: 4, maxDurability: 50, element: 'none', price: 120 },
-  diamondWand: { name: '다이아 마법봉', atkBonus: 6, maxDurability: 55, element: 'none', price: 150 },
-  radiantWand: { name: '레디언트 마법봉', atkBonus: 9, maxDurability: 65, element: 'none', price: 250 },
-  windBreathWand: { name: '바람의 마법봉', atkBonus: 12, maxDurability: 75, element: 'none', price: 350 },
+  silverWand: { name: '실버 마법봉', atkBonus: 2, element: 'none', price: 50 },
+  goldWand: { name: '골드 마법봉', atkBonus: 4, element: 'none', price: 100 },
+  flameWand: { name: '화염 마법봉', atkBonus: 2, element: 'fire', price: 80 },
+  frostWand: { name: '빙결 마법봉', atkBonus: 2, element: 'ice', price: 80 },
+  legendaryWand: { name: '레전더리 마법봉', atkBonus: 4, element: 'none', price: 120 },
+  diamondWand: { name: '다이아 마법봉', atkBonus: 6, element: 'none', price: 150 },
+  radiantWand: { name: '레디언트 마법봉', atkBonus: 9, element: 'none', price: 250 },
+  windBreathWand: { name: '바람의 마법봉', atkBonus: 12, element: 'none', price: 350 },
 };
 // 직업별로 상점에서 살 수 있는 무기 목록 — 용사는 기존 그대로, 궁수/힐러는 각자 전용 무기 계열
 const CLASS_WEAPON_KEYS = {
@@ -828,7 +854,6 @@ const CLASS_WEAPON_KEYS = {
 const POTION_CATALOG = {
   healthPotion: { name: '체력 물약', heal: 20, price: 15 },
 };
-const DURABILITY_UPGRADE_AMOUNT = 8; // 대장간에서 내구도 강화 시 최대 내구도(+현재 내구도)에 더해지는 양
 const MAP_ITEM_KEY = 'worldMap';
 const MAP_PRICE = 150;
 function shopCatalogFor(classKey) {
@@ -836,7 +861,7 @@ function shopCatalogFor(classKey) {
   return [
     ...weaponKeys.map(key => {
       const w = WEAPON_CATALOG[key];
-      return { key, kind: 'weapon', name: w.name, price: w.price, atkBonus: w.atkBonus, maxDurability: w.maxDurability, element: w.element };
+      return { key, kind: 'weapon', name: w.name, price: w.price, atkBonus: w.atkBonus, element: w.element };
     }),
     ...Object.entries(POTION_CATALOG).map(([key, p]) => ({ key, kind: 'potion', name: p.name, price: p.price, heal: p.heal })),
     { key: MAP_ITEM_KEY, kind: 'map', name: '세계 지도', price: MAP_PRICE },
@@ -845,19 +870,7 @@ function shopCatalogFor(classKey) {
 
 let nextItemId = 1;
 function makeStarterWeapon() {
-  return { id: 'w' + (nextItemId++), kind: 'weapon', key: 'starter', name: '낡은 검', atkBonus: 0, durability: 30, maxDurability: 30, element: 'none', enhanceLevel: 0 };
-}
-
-// 내구도가 0이 되면 무기가 그대로 부서져 사라지고, 맨손 대신 기본 무기(낡은 검)로 교체됨
-function breakWeaponIfDepleted(player) {
-  if (player.weapon.durability > 0) return;
-  const brokenName = player.weapon.name;
-  const starter = makeStarterWeapon();
-  player.weapon = starter;
-  player.user.weapon = starter;
-  saveUsers();
-  sendInventory(player);
-  sendTo(player, { type: 'weapon_broken', brokenName, weapon: starter });
+  return { id: 'w' + (nextItemId++), kind: 'weapon', key: 'starter', name: '낡은 검', atkBonus: 0, element: 'none', enhanceLevel: 0 };
 }
 
 function sendInventory(player) {
@@ -928,9 +941,10 @@ function spawnEliteMonster(room, zoneKey) {
 
 function spawnBoss(bossTypeKey) {
   const t = BOSS_TYPES[bossTypeKey];
+  const hp = Math.round(t.hp * BOSS_HP_SCALE);
   return {
     id: nextMonsterId++, kind: bossTypeKey, name: t.name, isBoss: true, weakness: t.weakness,
-    x: RAID_WORLD.w / 2, y: RAID_WORLD.h / 2, hp: t.hp, maxHp: t.hp, atk: Math.round(t.atk * BOSS_DAMAGE_SCALE), exp: t.exp, r: t.r,
+    x: RAID_WORLD.w / 2, y: RAID_WORLD.h / 2, hp, maxHp: hp, atk: Math.round(t.atk * BOSS_DAMAGE_SCALE), exp: t.exp, r: t.r,
     chaseSpeed: t.chaseSpeed, wanderSpeed: 0, aggroRange: t.aggroRange, deaggroRange: t.deaggroRange,
     mode: 'wander', targetId: null, lastAttackAt: 0, stunUntil: 0,
     wanderDir: { x: 0, y: 0 }, wanderUntil: 0,
@@ -1195,10 +1209,14 @@ let nextHazardId = 1;
 const BOSS_ENRAGE_HP_RATIO = 0.5;
 const BOSS_RETARGET_MS = 6000;
 // v3.6.1 난이도 완화 — 공격이 너무 몰아쳐서 파티로도 어렵다는 피드백: 피해·공격 빈도·분노 강화폭을 낮춤
-const BOSS_DAMAGE_SCALE = 0.8;   // 위험 지대·접촉 피해 배율
-const BOSS_GAP_SCALE = 1.4;      // 공격 사이 쉬는 시간 배율
-const BOSS_ENRAGE_GAP = 0.7;     // 분노 시 쉬는 시간(평소 대비)
-const BOSS_ENRAGE_DAMAGE = 1.15; // 분노 시 위험 지대 피해 배율
+// v3.7 대폭 하향 — 피해 절반, 쉬는 시간 2배, 체력 40% 감소, 맞았을 때 경직 절반, 분노 강화폭 축소
+const BOSS_DAMAGE_SCALE = 0.5;   // 위험 지대·접촉 피해 배율
+const BOSS_GAP_SCALE = 2.0;      // 공격 사이 쉬는 시간 배율
+const BOSS_HP_SCALE = 0.6;       // 보스 체력 배율
+const BOSS_STUN_SCALE = 0.5;     // 위험 지대에 맞았을 때 경직 시간 배율
+const BOSS_ENRAGE_GAP = 0.85;    // 분노 시 쉬는 시간(평소 대비)
+const BOSS_ENRAGE_DAMAGE = 1.05; // 분노 시 위험 지대 피해 배율
+const BOSS_ENRAGE_SPEED = 1.15;  // 분노 시 이동속도 배율
 
 function arenaClamp(x, y, pad = 40) {
   return { x: Math.max(pad, Math.min(RAID_WORLD.w - pad, x)), y: Math.max(pad, Math.min(RAID_WORLD.h - pad, y)) };
@@ -1222,6 +1240,7 @@ function addHazard(room, boss, h) {
     ...h,
   };
   hz.dmg = Math.round(hz.dmg * BOSS_DAMAGE_SCALE * (boss.special.enraged ? BOSS_ENRAGE_DAMAGE : 1));
+  hz.stunMs = Math.round(hz.stunMs * BOSS_STUN_SCALE);
   hz.id = nextHazardId++;
   hz.bornAt = now;
   hz.activeAt = now + hz.warnMs;
@@ -1795,7 +1814,7 @@ function updateBoss(room, boss, dt, now) {
     s.phase = 'idle';
     const slowMult = (boss.slowUntil && now < boss.slowUntil) ? 0.6 : 1;
     const speedMult = (s.speedUntil && now < s.speedUntil) ? s.speedMult : 1;
-    const speed = t.chaseSpeed * (s.enraged ? 1.3 : 1) * slowMult * speedMult;
+    const speed = t.chaseSpeed * (s.enraged ? BOSS_ENRAGE_SPEED : 1) * slowMult * speedMult;
     const dx = target.x - boss.x, dy = target.y - boss.y;
     const dist = Math.hypot(dx, dy);
     if (dist > boss.r + PLAYER_R + 4) {
@@ -1978,12 +1997,7 @@ function handleMeleeAttack(player, room, now) {
     hits.push(applyHitToMonster(room, player, m, dmg, now));
   }
   if (hits.length) {
-    weaponUsed.durability = Math.max(0, weaponUsed.durability - 1);
-    sendTo(player, {
-      type: 'attack_result', hits, totalExp: player.exp, level: player.level,
-      weaponDurability: weaponUsed.durability, weaponMaxDurability: weaponUsed.maxDurability,
-    });
-    breakWeaponIfDepleted(player);
+    sendTo(player, { type: 'attack_result', hits, totalExp: player.exp, level: player.level });
   }
 }
 
@@ -1992,7 +2006,6 @@ function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
   const weapon = player.weapon;
   let dmg = roll(player.atk + (weapon.atkBonus || 0) + (player.magic || 0));
   if (opts.dmgMult) dmg = Math.round(dmg * opts.dmgMult);
-  weapon.durability = Math.max(0, weapon.durability - 1);
   const angle = player.facing + angleOffset;
   const dirX = Math.cos(angle), dirY = Math.sin(angle);
   const proj = {
@@ -2007,8 +2020,7 @@ function spawnProjectile(room, player, angleOffset = 0, opts = {}) {
     type: 'projectile_spawn', id: proj.id, x: proj.x, y: proj.y, vx: proj.vx, vy: proj.vy,
     ownerId: player.id, classKey: player.classKey, maxLife: proj.maxLife, tag: opts.tag || null,
   });
-  sendTo(player, { type: 'attack_result', hits: [], totalExp: player.exp, level: player.level, weaponDurability: weapon.durability, weaponMaxDurability: weapon.maxDurability });
-  breakWeaponIfDepleted(player);
+  sendTo(player, { type: 'attack_result', hits: [], totalExp: player.exp, level: player.level });
 }
 
 function updateProjectiles(room, dt, now) {
@@ -2026,7 +2038,7 @@ function updateProjectiles(room, dt, now) {
       const owner = [...room.players.values()].find(p => p.id === proj.ownerId);
       if (owner) {
         const hit = applyHitToMonster(room, owner, hitMonster, proj.dmg, now);
-        sendTo(owner, { type: 'attack_result', hits: [hit], totalExp: owner.exp, level: owner.level, weaponDurability: owner.weapon.durability, weaponMaxDurability: owner.weapon.maxDurability });
+        sendTo(owner, { type: 'attack_result', hits: [hit], totalExp: owner.exp, level: owner.level });
       }
       if (proj.pierce) {
         proj.hitIds.add(hitMonster.id);
@@ -2497,8 +2509,7 @@ wss.on('connection', ws => {
         player.gold -= wcat.price;
         player.inventory.push({
           id: 'w' + (nextItemId++), kind: 'weapon', key: msg.itemKey, name: wcat.name,
-          atkBonus: wcat.atkBonus, durability: wcat.maxDurability, maxDurability: wcat.maxDurability,
-          element: wcat.element, enhanceLevel: 0,
+          atkBonus: wcat.atkBonus, element: wcat.element, enhanceLevel: 0,
         });
         syncGold(player);
         sendInventory(player);
@@ -2548,23 +2559,6 @@ wss.on('connection', ws => {
       player.weapon.enhanceLevel = (player.weapon.enhanceLevel || 0) + 1;
       syncGold(player);
       sendInventory(player);
-    } else if (msg.type === 'blacksmith_repair') {
-      const missing = player.weapon.maxDurability - player.weapon.durability;
-      if (missing <= 0) return;
-      const cost = missing * 2;
-      if (player.gold < cost) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
-      player.gold -= cost;
-      player.weapon.durability = player.weapon.maxDurability;
-      syncGold(player);
-      sendInventory(player);
-    } else if (msg.type === 'blacksmith_upgrade_durability') {
-      const cost = Math.round(25 + player.weapon.maxDurability * 1.2);
-      if (player.gold < cost) { sendTo(player, { type: 'shop_error', reason: '골드가 부족합니다' }); return; }
-      player.gold -= cost;
-      player.weapon.maxDurability += DURABILITY_UPGRADE_AMOUNT;
-      player.weapon.durability += DURABILITY_UPGRADE_AMOUNT;
-      syncGold(player);
-      sendInventory(player);
     } else if (msg.type === 'sell_item') {
       const room = rooms.get(player.roomId);
       if (!room) return;
@@ -2604,7 +2598,7 @@ wss.on('connection', ws => {
           if (item.qty <= 0) player.inventory.splice(idx, 1);
         } else if (item.kind === 'weapon') {
           listQty = 1;
-          listedItem = { kind: 'weapon', key: item.key, name: item.name, atkBonus: item.atkBonus, durability: item.durability, maxDurability: item.maxDurability, element: item.element, enhanceLevel: item.enhanceLevel };
+          listedItem = { kind: 'weapon', key: item.key, name: item.name, atkBonus: item.atkBonus, element: item.element, enhanceLevel: item.enhanceLevel };
           player.inventory.splice(idx, 1);
         } else {
           return;
